@@ -7,39 +7,56 @@ using namespace std;
 class SymbolTable{
     ScopeTable * curScopeTable;
     stack<ScopeTable *> scopeTables;
+    int totalBuckets;
 public:
 
     SymbolTable(int totalBuckets){
         curScopeTable = new ScopeTable(totalBuckets);
         scopeTables.push(curScopeTable);
+        this->totalBuckets = totalBuckets;
     }
     void printCurrentScopeTable(){
-        scopeTables.top()->print();
+        if(!this->scopeTables.empty())scopeTables.top()->print();
     }
 
     void print(){
+        if(!this->scopeTables.empty()){
         ScopeTable * cur = curScopeTable;
-        while(cur){
-            cur->print();
-            cur = cur->getParentScope();
-            cout << endl;
+            while(cur){
+                cur->print();
+                cur = cur->getParentScope();
+                cout << endl;
+            }
         }
     }
 
     void enterScope(){
-        ScopeTable * newScopeTable= new ScopeTable(curScopeTable);
-        curScopeTable = newScopeTable;
-        scopeTables.push(newScopeTable);
+        if(this->scopeTables.empty()){
+            curScopeTable = new ScopeTable(this->totalBuckets);
+            this->scopeTables.push(curScopeTable);
+        }
+        else{
+            ScopeTable * newScopeTable= new ScopeTable(curScopeTable);
+            curScopeTable = newScopeTable;
+            scopeTables.push(newScopeTable);
+        }
     }
 
     void exitScope(){
-        ScopeTable * removed = curScopeTable;
-        cout << "ScopeTable with id " << removed->getScopeId() << " removed\n\n";
-        
-        scopeTables.pop();
-        delete removed;
-        curScopeTable = this->scopeTables.top();
-        curScopeTable->childScopeExitted();
+        if(!this->scopeTables.empty()){
+            ScopeTable * removed = curScopeTable;
+            cout << "ScopeTable with id " << removed->getScopeId() << " removed\n\n";
+            scopeTables.pop();
+            if(!this->scopeTables.empty()){
+                curScopeTable = this->scopeTables.top();
+                curScopeTable->childScopeExitted();
+            }
+            delete removed;
+        }
+
+        else{
+            cout << "No current scope\n\n";
+        }
         
     }
 
@@ -48,6 +65,10 @@ public:
     }
 
     bool insert(SymbolInfo * newSymbol){
+        if(this->scopeTables.empty()){
+            curScopeTable = new ScopeTable(this->totalBuckets);
+            this->scopeTables.push(curScopeTable);
+        }
         return curScopeTable->insert(newSymbol);
     }
 

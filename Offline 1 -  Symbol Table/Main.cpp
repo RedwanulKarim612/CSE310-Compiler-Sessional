@@ -7,7 +7,7 @@ int main(){
     SymbolTable * symbolTable;
     
     ifstream file ;
-    file.open("input.txt", ios::in);
+    file.open("input_2.txt", ios::in);
 
     int n;
     file >> n;

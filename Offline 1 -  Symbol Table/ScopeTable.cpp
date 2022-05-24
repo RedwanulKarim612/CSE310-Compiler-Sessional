@@ -58,12 +58,11 @@ public:
         int c;
 
         int i = 0;
-        while (i<str.length()){
-            c = (int)str[i];
-            hash = c + (hash << 6)%totalBuckets + (hash << 16)%totalBuckets - hash;
-            hash = hash%totalBuckets;
-
-            i++;
+        while (c=str[i++]){
+            hash = c % totalBuckets + (hash << 6) % totalBuckets + (hash << 16)%totalBuckets - hash%totalBuckets;
+            hash+=totalBuckets;
+            hash=hash%totalBuckets;
+            // i++;
         }
         // cout << "HASH   "<<str << " " << hash << "\n\n\n";
         return hash%totalBuckets;
@@ -71,7 +70,7 @@ public:
 
     bool insert(SymbolInfo *symbol){
         if(lookup(symbol->getName())){
-            cout << "<" << symbol->getName() << ", " << symbol->getType() << "> already exists in current ScopeTable\n";
+            cout << "<" << symbol->getName() << ", " << symbol->getType() << "> already exists in current ScopeTable\n\n";
             return false; 
         }
         int hashIndex = (sdbm(symbol->getName()))%this->totalBuckets;
