@@ -11,11 +11,12 @@ class ScopeTable{
     SymbolInfo ** hashTable;
 
 public:
-    ScopeTable(int totalBuckets){
+    ScopeTable(int totalBuckets, ScopeTable * parentScope){
         this->totalBuckets = totalBuckets;
         hashTable = new SymbolInfo * [this->totalBuckets];
         for(int i=0;i<this->totalBuckets;i++)
             this->hashTable[i] = NULL;
+        this->parentScope = parentScope;
         if(this->parentScope!=NULL){
             string id = "";
             id += this->parentScope->getScopeId();
@@ -23,18 +24,20 @@ public:
             id += parentScope->getScopesDeleted();
             id += to_string(parentScope->getScopesDeleted() + 1) ;
             this->scopeId = id;
-
             cout << "New ScopeTable with id " << this->scopeId << " created\n\n";
         }
-        else this->scopeId = "1";
+        else {
+            this->scopeId = "1";
+            this->parentScope = NULL;
+        }
         this->scopesDeleted = 0;
 
     }
 
-    ScopeTable(ScopeTable * parentScope){
-        this->parentScope = parentScope;
-        new (this) ScopeTable(this->parentScope->getTotalBuckets());
-    }
+    // ScopeTable(ScopeTable * parentScope){
+    //     this->parentScope = parentScope;
+    //     new (this) ScopeTable(this->parentScope->getTotalBuckets());
+    // }
 
 
     string getScopeId(){
@@ -77,6 +80,7 @@ public:
         SymbolInfo *curSymbol = this->hashTable[hashIndex];
         int cnt = 1;
         if(curSymbol==NULL){
+            delete this->hashTable[hashIndex];
             this->hashTable[hashIndex] = new SymbolInfo(symbol->getName(), symbol->getType());
             cnt = 0;
         }

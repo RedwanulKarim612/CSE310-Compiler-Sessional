@@ -10,7 +10,7 @@ class SymbolTable{
 public:
 
     SymbolTable(int totalBuckets){
-        curScopeTable = new ScopeTable(totalBuckets);
+        curScopeTable = new ScopeTable(totalBuckets,NULL);
         this->totalBuckets = totalBuckets;
     }
     void printCurrentScopeTable(){
@@ -33,13 +33,9 @@ public:
     }
 
     void enterScope(){
-        if(!curScopeTable){
-            curScopeTable = new ScopeTable(this->totalBuckets);
-        }
-        else{
-            ScopeTable * newScopeTable= new ScopeTable(curScopeTable);
-            curScopeTable = newScopeTable;
-        }
+        ScopeTable * newScopeTable= new ScopeTable(totalBuckets, curScopeTable);
+        curScopeTable = newScopeTable;
+        
     }
 
     void exitScope(){
@@ -64,10 +60,10 @@ public:
     }
 
     bool insert(SymbolInfo * newSymbol){
-        if(curScopeTable==nullptr){
-            curScopeTable = new ScopeTable(this->totalBuckets);
+        if(this->curScopeTable==nullptr){
+            this->curScopeTable = new ScopeTable(this->totalBuckets, curScopeTable);
         }
-        return curScopeTable->insert(newSymbol);
+        return this->curScopeTable->insert(newSymbol);
     }
 
     bool remove(string name){
@@ -93,6 +89,10 @@ public:
         }
         cout << "Not Found\n\n";
         return NULL;
+    }
+
+    ~ SymbolTable(){
+        delete curScopeTable;
     }
 
 };

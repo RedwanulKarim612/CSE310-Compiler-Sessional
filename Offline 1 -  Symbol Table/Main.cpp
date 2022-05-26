@@ -55,5 +55,6 @@ int main(){
             else if(f=='A') {symbolTable->print();}
         }
     }
+    delete symbolTable;
     return 0;
 }
