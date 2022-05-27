@@ -8,6 +8,9 @@ class SymbolInfo{
     SymbolInfo * nextSymbol;
 
 public:
+    SymbolInfo(){
+
+    }
 
     SymbolInfo(string name, string type){
         this->name = name;
@@ -46,7 +49,7 @@ public:
 
     ~SymbolInfo(){
         // cout << this->name << " destroyed\n\n";
-        delete(nextSymbol);
+        delete nextSymbol;
     }
 
 };

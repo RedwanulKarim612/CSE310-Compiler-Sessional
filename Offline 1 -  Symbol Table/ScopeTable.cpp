@@ -21,17 +21,14 @@ public:
             string id = "";
             id += this->parentScope->getScopeId();
             id += ".";
-            id += parentScope->getScopesDeleted();
             id += to_string(parentScope->getScopesDeleted() + 1) ;
             this->scopeId = id;
             cout << "New ScopeTable with id " << this->scopeId << " created\n\n";
         }
         else {
             this->scopeId = "1";
-            this->parentScope = NULL;
         }
         this->scopesDeleted = 0;
-
     }
 
     // ScopeTable(ScopeTable * parentScope){
@@ -56,18 +53,16 @@ public:
         return this->parentScope;
     }
 
-    unsigned long long sdbm(string str){
-        unsigned long long hash = 0;
+    uint32_t sdbm(string str){
+        uint32_t hash = 0;
         int c;
 
         int i = 0;
         while (c=str[i++]){
-            hash = c % totalBuckets + (hash << 6) % totalBuckets + (hash << 16)%totalBuckets - hash%totalBuckets;
-            hash+=totalBuckets;
-            hash=hash%totalBuckets;
-            // i++;
+            hash = c  + (hash << 6)  + (hash << 16)- hash;
         }
         // cout << "HASH   "<<str << " " << hash << "\n\n\n";
+        str.clear();
         return hash%totalBuckets;
     }
 
@@ -77,14 +72,14 @@ public:
             return false; 
         }
         int hashIndex = (sdbm(symbol->getName()))%this->totalBuckets;
-        SymbolInfo *curSymbol = this->hashTable[hashIndex];
+        
         int cnt = 1;
-        if(curSymbol==NULL){
-            delete this->hashTable[hashIndex];
+        if(this->hashTable[hashIndex]==NULL){
             this->hashTable[hashIndex] = new SymbolInfo(symbol->getName(), symbol->getType());
             cnt = 0;
         }
         else{
+            SymbolInfo *curSymbol = this->hashTable[hashIndex];
             while(curSymbol->getNextSymbol()!=NULL){
                 cnt++;
                 if(curSymbol->getName()==symbol->getName()){
@@ -92,8 +87,7 @@ public:
                 }    
                 curSymbol = curSymbol->getNextSymbol();
             }
-
-            curSymbol->setNextSymbol(symbol);
+            curSymbol->setNextSymbol(symbol);            
         }
         cout << "Inserted in ScopeTable# " << this->scopeId << " at position " << hashIndex << ", " << cnt << "\n\n";
         return true;
@@ -119,28 +113,30 @@ public:
         SymbolInfo * symbol = this->lookup(symbolName);
         if(symbol==NULL) {
             cout << symbolName << " not found\n\n";
+            delete symbol;
             return false;
         }
         int hashIndex = (sdbm(symbolName))%this->totalBuckets;
         int cnt = 1;
         if(this->hashTable[hashIndex]->getName() == symbolName){
             cnt = 0; 
-            this->hashTable[hashIndex] = this->hashTable[hashIndex]->getNextSymbol();
+            SymbolInfo *newSymbol =  this->hashTable[hashIndex]->getNextSymbol();
+            
         }
         else{
             SymbolInfo * curSymbol = this->hashTable[hashIndex];
             while(curSymbol->getNextSymbol()!=NULL){
                 if(curSymbol->getNextSymbol()->getName()==symbolName){
-                    SymbolInfo * toDelete;
-                    toDelete = curSymbol->getNextSymbol();
+                    SymbolInfo * toDelete = curSymbol->getNextSymbol();
                     curSymbol->setNextSymbol(toDelete->getNextSymbol());
-                    delete(toDelete);
+                    delete toDelete;
                     break;
                 }
                 cnt++;
                 curSymbol = curSymbol->getNextSymbol();
             }
         }
+
 
         cout << "Deleted " << hashIndex << " " << cnt << " from current ScopeTable\n\n";
         return true;
@@ -168,11 +164,10 @@ public:
     ~ ScopeTable(){
         // cout << "destructor scopetable # " << this->scopeId << endl;
         for(int i=0;i<this->totalBuckets;i++){
-            delete this->hashTable[i];
+            SymbolInfo *cur = this->hashTable[i];
+            delete cur;
         }
         delete [] hashTable;
     }
-
-
 };
 

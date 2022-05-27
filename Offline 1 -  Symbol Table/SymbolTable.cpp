@@ -8,9 +8,8 @@ class SymbolTable{
     ScopeTable * curScopeTable;
     int totalBuckets;
 public:
-
     SymbolTable(int totalBuckets){
-        curScopeTable = new ScopeTable(totalBuckets,NULL);
+        this->curScopeTable = new ScopeTable(totalBuckets,NULL);
         this->totalBuckets = totalBuckets;
     }
     void printCurrentScopeTable(){
@@ -33,34 +32,35 @@ public:
     }
 
     void enterScope(){
-        ScopeTable * newScopeTable= new ScopeTable(totalBuckets, curScopeTable);
-        curScopeTable = newScopeTable;
-        
+        this->curScopeTable = new ScopeTable(this->totalBuckets, curScopeTable);
     }
 
     void exitScope(){
+        ScopeTable * removed = curScopeTable;
         if(curScopeTable){
-            ScopeTable * removed = curScopeTable;
             curScopeTable = curScopeTable->getParentScope();
             cout << "ScopeTable with id " << removed->getScopeId() << " removed\n\n";
             if(curScopeTable){
                 curScopeTable->childScopeExitted();
             }
-            delete removed;
         }
 
         else{
             cout << "No current scope\n\n";
         }
         
+        delete removed;
     }
 
     bool insert(string name, string type){
-        return insert(new SymbolInfo(name, type));
+        SymbolInfo * symbol = new SymbolInfo(name, type);
+        bool f =  this->insert(symbol);
+        delete symbol;
+        return f;
     }
 
     bool insert(SymbolInfo * newSymbol){
-        if(this->curScopeTable==nullptr){
+        if(!this->curScopeTable){
             this->curScopeTable = new ScopeTable(this->totalBuckets, curScopeTable);
         }
         return this->curScopeTable->insert(newSymbol);
@@ -92,7 +92,12 @@ public:
     }
 
     ~ SymbolTable(){
-        delete curScopeTable;
+        this->totalBuckets = -1;
+        while(this->curScopeTable){
+            ScopeTable *parent = this->curScopeTable->getParentScope();
+            delete this->curScopeTable;
+            this->curScopeTable = parent;
+        }
     }
 
 };
