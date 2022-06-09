@@ -1,5 +1,10 @@
 %option noyywrap
 
+
+%x SINGLE_LINE_COMMENT_STATE
+%x MULTILINE_COMMENT_STATE
+%x STRING_SCANNING_STATE
+
 %{
 #include<bits/stdc++.h>
 #include "SymbolTable.cpp"
@@ -7,10 +12,54 @@ using namespace std;
 
 int line_count = 1;
 int error_count = 0;
+int comment_line_count = 0;
+int string_line_count = 0;
 SymbolTable symbolTable(11);
+char * comment = "";
+char * curStr = "";
 
 FILE *logout;
 FILE *tokenout;
+
+void printToFileKeyWords(char * tokenName){
+    fprintf(tokenout,"<%s> ", tokenName);
+    fprintf(logout,"Line no %d: TOKEN <%s> Lexeme %s found\n\n",line_count,tokenName, yytext);
+}
+
+void printToFile(char *tokenName){
+    fprintf(tokenout,"<%s, %s> ", tokenName, yytext);
+    fprintf(logout,"Line no %d: TOKEN <%s> Lexeme %s found\n\n",line_count,tokenName, yytext);
+}
+
+char getASCII(char ch){
+    if(ch=='n') return '\n';
+    else if(ch=='t') return '\t';
+    else if(ch=='\\') return '\\';
+    else if(ch=='\'') return '\'';
+    else if(ch=='a') return '\a';
+    else if(ch=='f') return '\f';
+    else if(ch=='r') return '\r';
+    else if(ch=='b') return '\b';
+    else if(ch=='v') return '\v';
+    else if(ch=='\0') return '\0';
+    else if(ch=='\"') return '\"';
+}
+
+string getTokenAttribute(char * curStr){
+    string str(curStr);
+    str = str.substr(0, str.length()-1);
+    str = str.substr(1);
+    string ans = "";
+    for(int i=0;i<strlen(curStr)-1;i++){
+        if(str[i]!='\\'){ans+=str[i];}
+        else{
+            i++;
+            if(str[i]=='\n') continue;
+            ans+=getASCII(str[i]);
+        }
+    }
+    return ans;   
+}
 
 %}
 
@@ -36,175 +85,244 @@ MULOP [*/%]
 ID ({LETTER}|"_")({LETTER}|{DIGIT}|"_")*
 INTEGER_LITERAL {DIGIT}+
 FLOAT_LITERAL {DIGIT}*"."{DIGIT}+([E]{DIGIT}+)?
-CHARACTER_LITERAL [']({DIGIT}|{LETTER}|"\t"|"\n"|"\\"|"\'"|"\a"|"\f"|"\r"|"\b"|"\v"|"\0")[']
-INVALID_FLOAT {FLOAT_LITERAL}{FLOAT_LITERAL}+
+CHARACTER_LITERAL ['](.|"\\t"|"\\n"|"\\"|"\\'"|"\\a"|"\\f"|"\\r"|"\\b"|"\\v|\\0")[']
+INVALID_FLOAT {DIGIT}+"."({DIGIT}*".")+
 INVALID_INDENTIFIER {DIGIT}+{LETTER}+
+MULTI_CHARACTER ['](.)(.)+[']
+EMPTY_CHARACTER [']("")['] 
+UNFINISHED_CHARACTER ['](.|"\\t"|"\\n"|"\\"|"\\a"|"\\f"|"\\r"|"\\b"|"\\v|\\0")
+
 
 
 %%
+{WHITESPACE} {}
 
 {NEWLINE}   {line_count++;}
 
 "if"	    {
-                fprintf(tokenout,"<IF> ");
-                fprintf(logout,"Line no %d: TOKEN <IF> Lexeme %s found\n",line_count,yytext);
+                printToFileKeyWords("IF");
 		    }
 		
 "else"	    {
-                fprintf(tokenout,"<ELSE> ");
-                fprintf(logout,"Line no %d: TOKEN <ELSE> Lexeme %s found\n",line_count,yytext);
+                printToFileKeyWords("ELSE");
             }
 
 "for"       {
-                fprintf(tokenout,"<FOR> ");
-                fprintf(logout,"Line no %d: TOKEN <FOR> Lexeme %s found\n",line_count,yytext);
+                printToFileKeyWords("FOR");
             }
 
 "while"     {
-                fprintf(tokenout,"<WHILE> ");
-                fprintf(logout,"Line no %d: TOKEN <WHILE> Lexeme %s found\n",line_count,yytext);
+                printToFileKeyWords("WHILE");
             }
 
 "do"        {
-		    	fprintf(tokenout,"<DO> ");
-			    fprintf(logout,"Line no %d: TOKEN <DO> Lexeme %s found\n",line_count,yytext);
-		    }
+                printToFileKeyWords("DO");
+            }
 
 "break"     {
-                fprintf(tokenout,"<BREAK> ");
-                fprintf(logout,"Line no %d: TOKEN <BREAK> Lexeme %s found\n",line_count,yytext);
+                printToFileKeyWords("BREAK");
             }
 
 "int"      {
-                fprintf(tokenout,"<INT> ");
-                fprintf(logout,"Line no %d: TOKEN <INT> Lexeme %s found\n",line_count,yytext);
+                printToFileKeyWords("INT");
             }
 
 "char"      {
-                fprintf(tokenout,"<CHAR> ");
-                fprintf(logout,"Line no %d: TOKEN <CHAR> Lexeme %s found\n",line_count,yytext);
+                printToFileKeyWords("CHAR");
             }
 
 "float"     {
-                fprintf(tokenout,"<FLOAT> ");
-                fprintf(logout,"Line no %d: TOKEN <FLOAT> Lexeme %s found\n",line_count,yytext);
+                printToFileKeyWords("FLOAT");
             }
 
 "double"    {
-                fprintf(tokenout,"<DOUBLE> ");
-                fprintf(logout,"Line no %d: TOKEN <DOUBLE> Lexeme %s found\n",line_count,yytext);
+                printToFileKeyWords("DOUBLE");
             }
 
 "void"      {
-                fprintf(tokenout,"<VOID> ");
-                fprintf(logout,"Line no %d: TOKEN <VOID> Lexeme %s found\n",line_count,yytext);
+                printToFileKeyWords("VOID");
             }
 
 "return"    {
-                fprintf(tokenout,"<RETURN> ");
-                fprintf(logout,"Line no %d: TOKEN <RETURN> Lexeme %s found\n",line_count,yytext);
+                printToFileKeyWords("RETURN");
             }
 
 "switch"    {
-                fprintf(tokenout,"<SWITCH> ");
-                fprintf(logout,"Line no %d: TOKEN <SWITCH> Lexeme %s found\n",line_count,yytext);
+                printToFileKeyWords("SWITCH");
             }
 
 "case"      {
-                fprintf(tokenout,"<CASE> ");
-                fprintf(logout,"Line no %d: TOKEN <CASE> Lexeme %s found\n",line_count,yytext);
+                printToFileKeyWords("CASE");
             }
-
+            
 "default"   {
-                fprintf(tokenout,"<DEFAULT> ");
-                fprintf(logout,"Line no %d: TOKEN <DEFAULT> Lexeme %s found\n",line_count,yytext);
+                printToFileKeyWords("DEFAULT");
             }
+            
 
 "continue"  {
-                fprintf(tokenout,"<CONTINUE> ");
-                fprintf(logout,"Line no %d: TOKEN <CONTINUE> Lexeme %s found\n",line_count,yytext);
+                printToFileKeyWords("CONTINUE");
             }
 
+["]         {
+                BEGIN STRING_SCANNING_STATE;
+                curStr = (char *)(malloc(3000));
+                strcat(curStr, yytext);
+                string_line_count = 0;
+            } 
+
+
+<STRING_SCANNING_STATE>(.*)["] {
+                strcat(curStr, yytext);
+                string ans = getTokenAttribute(curStr);
+                fprintf(logout,"Line no %d: TOKEN <STRING> Lexeme %s found --> <STRING, %s>\n\n",line_count,curStr,ans.c_str());
+                line_count+=string_line_count;
+                BEGIN INITIAL;
+            }     
+
+<STRING_SCANNING_STATE><<EOF>> {
+                line_count+=string_line_count;
+                fprintf(logout,"Line no %d: Unfinished string found\n\n",line_count);
+                error_count++;
+                BEGIN INITIAL;
+            }
+
+<STRING_SCANNING_STATE>(.*)("\\"{NEWLINE})+ {
+                strcat(curStr, yytext);
+                string_line_count++;
+            }
+
+<STRING_SCANNING_STATE>{NEWLINE} {
+                line_count+=string_line_count+1;
+                fprintf(logout,"Line no %d: Unfinished string found\n\n",line_count);
+                error_count++;
+                BEGIN INITIAL;
+            }
+
+
+"//"        {
+                BEGIN SINGLE_LINE_COMMENT_STATE;
+                comment_line_count = 0;
+                comment = (char *)malloc(3000);
+                strcat(comment, yytext);
+            }
+
+<SINGLE_LINE_COMMENT_STATE>(.*)("\\"{NEWLINE})* {
+                strcat(comment, yytext);
+                comment_line_count++;
+            }
+<SINGLE_LINE_COMMENT_STATE>{NEWLINE} {
+                fprintf(logout, "Line no %d: TOKEN <COMMENT> Lexeme %s found\n\n", line_count, comment);
+                line_count+=comment_line_count;
+                comment_line_count=0;
+                BEGIN INITIAL;
+            }
+<SINGLE_LINE_COMMENT_STATE><<EOF>> {
+                line_count+=comment_line_count;
+                fprintf(logout, "Line no %d: TOKEN <COMMENT> Lexeme %s found\n\n", line_count, comment);
+                BEGIN INITIAL;
+            } 
+
+"/*"       {    
+                BEGIN MULTILINE_COMMENT_STATE;
+                comment_line_count = 0;
+                comment = (char *)malloc(3000);
+                strcat(comment, yytext);
+            }
+
+<MULTILINE_COMMENT_STATE><<EOF>> {
+                fprintf(logout, "Line no %d: Unfinished comment found\n\n", line_count);
+                error_count++;
+                line_count+=comment_line_count;
+                BEGIN INITIAL;
+            }
+
+<MULTILINE_COMMENT_STATE>(.*)"*/" {
+                strcat(comment, yytext);
+                fprintf(logout, "Line no %d: TOKEN <COMMENT> Lexeme %s found\n\n", line_count, comment);
+                line_count+=comment_line_count;
+                comment_line_count=0;
+                BEGIN INITIAL;
+            }      
+
+<MULTILINE_COMMENT_STATE>(.*) {
+                strcat(comment, yytext);
+            }
+
+<MULTILINE_COMMENT_STATE>{NEWLINE} {
+                strcat(comment, yytext);
+                comment_line_count++;
+            }
+
+
+
 {COMMA}     {
-            	fprintf(tokenout,"<COMMA,%s> ",yytext);
-				fprintf(logout,"Line no %d: TOKEN <COMMA> Lexeme %s found\n",line_count,yytext);
+                printToFile("COMMA");
             }
 
 {SEMICOLON} {
-            	fprintf(tokenout,"<SEMICOLON,%s> ",yytext);
-				fprintf(logout,"Line no %d: TOKEN <SEMICOLON> Lexeme %s found\n",line_count,yytext);
+                printToFile("SEMICOLON");
             }           
 
 {ASSIGNOP}  {
-        	    fprintf(tokenout,"<ASSIGNOP,%s> ",yytext);
-				fprintf(logout,"Line no %d: TOKEN <ASSIGNOP> Lexeme %s found\n",line_count,yytext);
-			
+                printToFile("ASSIGNOP");
             }          
 
 {INCOP}     {
-                fprintf(tokenout,"<INCOP,%s> ",yytext);
-                fprintf(logout,"Line no %d: TOKEN <INCOP> Lexeme %s found\n",line_count,yytext);
+                printToFile("INCOP");
             }
 
 {RELOP}     {
-                fprintf(tokenout,"<RELOP,%s> ",yytext);
-				fprintf(logout,"Line no %d: TOKEN <RELOP> Lexeme %s found\n",line_count,yytext);
+                printToFile("RELOP");
             }
 
 {ADDOP}     {
-                fprintf(tokenout,"<ADDOP,%s> ",yytext);
-                fprintf(logout,"Line no %d: TOKEN <ADDOP> Lexeme %s found\n",line_count,yytext);
+                printToFile("ADDOP");
+            }
+
+{MULOP}     {
+                printToFile("MULOP");
             }
 
 {LPAREN}    {
-                fprintf(tokenout,"<LPAREN,%s> ",yytext);
-                fprintf(logout,"Line no %d: TOKEN <LPAREN> Lexeme %s found\n",line_count,yytext);
-            }            
-
+                printToFile("LPAREN");
+            }
 
 {RPAREN}    {
-                fprintf(tokenout,"<RPAREN,%s> ",yytext);
-                fprintf(logout,"Line no %d: TOKEN <RPAREN> Lexeme %s found\n",line_count,yytext);
+                printToFile("RPAREN");
             }            
 
 {LCURL}    {
-                fprintf(tokenout,"<LCURL,%s> ",yytext);
-                fprintf(logout,"Line no %d: TOKEN <LCURL> Lexeme %s found\n",line_count,yytext);
-                symbolTable.enterScope();
+                printToFile("LCURL");
             }            
 
 {RCURL}    {
-                fprintf(tokenout,"<RCURL,%s> ",yytext);
-                fprintf(logout,"Line no %d: TOKEN <RCURL> Lexeme %s found\n",line_count,yytext);
-                symbolTable.exitScope();
+                printToFile("RCURL");
             }            
 
 {LTHIRD}    {
-                fprintf(tokenout,"<LTHIRD,%s> ",yytext);
-                fprintf(logout,"Line no %d: TOKEN <LTHIRD> Lexeme %s found\n",line_count,yytext);
+                printToFile("LTHIRD");
             }            
 
 {RTHIRD}    {
-                fprintf(tokenout,"<RTHIRD,%s> ",yytext);
-                fprintf(logout,"Line no %d: TOKEN <RTHIRD> Lexeme %s found\n",line_count,yytext);
+                printToFile("RTHIRD");
             }            
 
 {FLOAT_LITERAL} {
-
-				fprintf(tokenout,"<CONST_FLOAT,%s> ",yytext);
-				fprintf(logout,"Line no %d: TOKEN <CONST_FLOAT> Lexeme %s found\n",line_count,yytext);
+                printToFile("CONST_FLOAT");
+                symbolTable.insert("float", yytext);
             }   
 
 {INTEGER_LITERAL} {
-
-				fprintf(tokenout,"<CONST_INT,%s> ",yytext);
-				fprintf(logout,"Line no %d: TOKEN <CONST_INT> Lexeme %s found\n",line_count,yytext);
+                printToFile("CONST_INT");
+                symbolTable.insert("int", yytext);
             }   
 
 {CHARACTER_LITERAL} {
-            	fprintf(tokenout,"<CONST_CHAR,%s> ",yytext);
-				fprintf(logout,"Line no %d: TOKEN <CONST_CHAR> Lexeme %s found\n",line_count,yytext);
-                
+                char *str = yytext;
+                string ans = getTokenAttribute(str);
+                fprintf(logout,"Line no %d: TOKEN <CONST_CHAR> Lexeme %s found --> <CONST_CHAR, %s>\n\n",line_count,str,ans.c_str());
+                symbolTable.print();
             }
 
 {INVALID_FLOAT} {
@@ -214,8 +332,7 @@ INVALID_INDENTIFIER {DIGIT}+{LETTER}+
 
 
 {ID}        {
-                fprintf(tokenout,"<ID,%s> ",yytext);
-				fprintf(logout,"Line no %d: TOKEN <ID> Lexeme %s found\n",line_count,yytext);
+                printToFile("ID");
             }
 
 {INVALID_INDENTIFIER} {
@@ -223,11 +340,35 @@ INVALID_INDENTIFIER {DIGIT}+{LETTER}+
                 error_count++;
             }
 
+{MULTI_CHARACTER}   {
+                fprintf(logout, "Line no %d: Multi character constant error\n", line_count);
+                error_count++;
+            }
+
+{EMPTY_CHARACTER}   {
+                fprintf(logout, "Line no %d: Empty character constant error\n", line_count);
+                error_count++;
+            
+            }
+
+{UNFINISHED_CHARACTER} {
+                fprintf(logout, "Line no %d: Unfinished character constant error\n", line_count);
+                error_count++;
+        
+        }
+
+
+
     <<EOF>>     {
-        fprintf(logout, "Total Lines : %d\n", line_count);
-        fprintf(logout, "Total Errors : %d\n", error_count);
-        return 0;
-    }
+            
+                fprintf(logout, "Total Lines : %d\n", line_count);
+                fprintf(logout, "Total Errors : %d\n", error_count);
+                yyterminate();
+                return 0;
+            }   
+    [.]     {
+                fprintf(logout, "Line no %d: Stray %s\n\n", line_count, yytext);
+            }
 
 %%
 
