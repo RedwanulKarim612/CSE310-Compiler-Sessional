@@ -21,6 +21,7 @@ extern int line_count;
 
 int yylex(void);
 int yyparse(void);
+vector<SymbolInfo*> parameterBuffer;
 
 string toStringDeclarationList(vector<SymbolInfo*>* symbols){
         string ans = "";
@@ -79,6 +80,32 @@ string toStringFuncDeclaration(vector<SymbolInfo*>* symbols){
         return ans;
 }
 
+string toStringArguments(vector<SymbolInfo*>* symbols){
+        string ans = "";
+        for(int i=0;i<symbols->size();i++){
+                ans += symbols->at(i)->getName();
+                if(i!=symbols->size()-1)
+                        ans+=",";
+        }
+        return ans;
+}
+
+void storeIntoBuffer(vector<SymbolInfo*>* params){
+        parameterBuffer.clear();
+        for(int i=0;i<params->size();i++){
+                params->at(i)->setType("ID");
+                parameterBuffer.push_back(params->at(i));
+        }
+}
+
+void loadFromBuffer(){
+        if(!parameterBuffer.empty()){
+                for(int i=0;i<parameterBuffer.size();i++){
+                       table.insert(parameterBuffer[i]);
+                }
+        }
+                parameterBuffer.clear();       
+}
 %}
 
 %define parse.error verbose
@@ -98,10 +125,10 @@ string toStringFuncDeclaration(vector<SymbolInfo*>* symbols){
 
 %type <symbolInfo> start variable type_specifier 
 %type <symbolInfo> expression_statement 
-%type <symbolInfo> unary_expression factor arguments 
-%type <symbolInfo> expression logic_expression simple_expression rel_expression term argument_list
+%type <symbolInfo> unary_expression factor 
+%type <symbolInfo> expression logic_expression simple_expression rel_expression term 
 %type <text> statement statements compound_statement func_definition unit program
-%type <multipleSymbols> declaration_list var_declaration parameter_list func_declaration 
+%type <multipleSymbols> declaration_list var_declaration parameter_list func_declaration argument_list arguments 
 
 %%
 start   :   program     {
@@ -167,8 +194,8 @@ func_declaration    :   type_specifier ID LPAREN parameter_list RPAREN SEMICOLON
                     ;
 
 
-func_definition     :   type_specifier ID LPAREN parameter_list RPAREN compound_statement {
-                                $$ = new SimpleText();
+func_definition     :   type_specifier ID LPAREN parameter_list RPAREN {
+                                parameterBuffer.clear();
                                 SymbolInfo * func = table.lookup($2->getName());
                                 if(!func){
                                         if(func->getIsFunc()){
@@ -178,12 +205,11 @@ func_definition     :   type_specifier ID LPAREN parameter_list RPAREN compound_
                                                 }
                                                 else if(!func->matchParamList($4) || !func->matchReturnType($1->getName())){
                                                         // error :: function does not match signature
+                                                        fprintf(errorOut, "Error at Line %d: function signature do not match\n\n", line_count);
                                                 }
                                                 else {
-                                                        func->setDefined();          
-                                                        $$->appendText($1->getName() + " " + $2->getName());
-                                                        $$->appendText("(" + toStringParameterList($4) +")");
-                                                        $$->appendText($6->getText()); 
+                                                        func->setDefined();    
+                                                        storeIntoBuffer($4);      
                                                 }
                                         }
                                         else{
@@ -191,12 +217,17 @@ func_definition     :   type_specifier ID LPAREN parameter_list RPAREN compound_
                                         }
                                 }
                                 else{
-                                        func->setDefined();          
-                                        $$->appendText($1->getName() + " " + $2->getName());
-                                        $$->appendText("(" + toStringParameterList($4) +")");
-                                        $$->appendText($6->getText()); 
+                                        func->setDefined();    
+                                        storeIntoBuffer($4);      
                                 }
+
+                        } compound_statement {
+                                $$ = new SimpleText();
+                                $$->appendText($1->getName() + " " + $2->getName());
+                                $$->appendText("(" + toStringParameterList($4) +")");
+                                $$->appendText($7->getText()); 
                                 fprintf(logOut,"Line %d: func_definition : type_specifier ID LPAREN parameter_list RPAREN compound_statement \n\n%s\n\n", line_count, $$->getText().c_str());
+                      
                         }
                     |   type_specifier ID LPAREN RPAREN compound_statement {
                                 $$ = new SimpleText();
@@ -233,36 +264,47 @@ func_definition     :   type_specifier ID LPAREN parameter_list RPAREN compound_
 
 parameter_list      :   parameter_list COMMA type_specifier ID{
                                 $$ = new vector<SymbolInfo*>($1->begin(),$1->end());
-                                $$->push_back(new SymbolInfo($4->getName(), $3->getName()));
+                                SymbolInfo* s = new SymbolInfo($4->getName(), "ID");
+                                s->setDataType($3->getName());
+                                $$->push_back(s);
+                                
                                 fprintf(logOut,"Line %d: parameter_list  :  parameter_list COMMA type_specifier ID\n\n%s\n\n", line_count, toStringParameterList($$).c_str());
                         }
                     |   parameter_list COMMA type_specifier{
                                 $$ = new vector<SymbolInfo*>($1->begin(),$1->end());
-                                $$->push_back(new SymbolInfo("", $3->getName()));
+                                SymbolInfo* s = new SymbolInfo("", "ID");
+                                s->setDataType($3->getName());
+                                $$->push_back(s);
                                 fprintf(logOut,"Line %d: parameter_list  :  parameter_list COMMA type_specifier\n\n%s\n\n", line_count, toStringParameterList($$).c_str());
                         }
                     |   type_specifier ID{
                                 $$ = new vector<SymbolInfo*>();
-                                $$->push_back(new SymbolInfo($2->getName(),$1->getName()));
+                                SymbolInfo* s = new SymbolInfo($2->getName(), "ID");
+                                s->setDataType($1->getName());
+                                $$->push_back(s);
                                 fprintf(logOut,"Line %d: parameter_list  :  type_specifier ID\n\n%s\n\n", line_count, toStringParameterList($$).c_str());
                         }
                     |   type_specifier{
                                 $$ = new vector<SymbolInfo*>();
-                                $$->push_back(new SymbolInfo("", $1->getName()));
+                                SymbolInfo* s = new SymbolInfo("", "ID");
+                                s->setDataType($1->getName());
+                                $$->push_back(s);
                                 fprintf(logOut,"Line %d: parameter_list  :  type_specifier\n\n%s\n\n", line_count, toStringParameterList($$).c_str());
-
                         }
                     ;
 
-compound_statement   :   LCURL statements RCURL {
-                                $$ = new SimpleText("{\n" + $2->getText() + "}\n");
+compound_statement   :   LCURL {table.enterScope();loadFromBuffer();} statements RCURL  {
+                                $$ = new SimpleText("{\n" + $3->getText() + "}\n");
                                 fprintf(logOut,"Line %d: compound_statement  :  LCURL statements RCURL\n\n%s\n\n", line_count, $$->getText().c_str());
+                                table.print(logOut);
+                                table.exitScope();
                         }
-                    |   LCURL RCURL {
+                    |   LCURL RCURL {table.enterScope();}{
                                 $$ = new SimpleText("{}\n");
                                 fprintf(logOut,"Line %d: compound_statement  :  LCURL statements RCURL\n\n%s\n\n", line_count, $$->getText().c_str());
-                        
-                    }
+                                table.print(logOut);
+                                table.exitScope();
+                        }
                     ;
 
 var_declaration     : type_specifier declaration_list SEMICOLON {
@@ -357,12 +399,30 @@ statement           :   var_declaration{
                                 $$ = new SimpleText($1->getText());
                                 fprintf(logOut, "Line %d: statement : compound_statement\n\n%s\n\n",line_count, $$->getText().c_str());
                         }
-                    |   FOR LPAREN expression_statement expression_statement expression RPAREN statement
-                    |   IF LPAREN expression RPAREN statement
-                    |   IF LPAREN expression RPAREN statement ELSE statement
-                    |   WHILE LPAREN expression RPAREN statement
-                    |   PRINTLN LPAREN ID RPAREN SEMICOLON
-                    |   RETURN expression SEMICOLON
+                    |   FOR LPAREN expression_statement expression_statement expression RPAREN statement {
+                                $$ = new SimpleText("for(" + $3->getName() + $4->getName() + $5->getName() + ")" + $7->getText());
+                                fprintf(logOut, "Line %d: statement : FOR LPAREN expression_statement expression_statement expression RPAREN statement\n\n%s\n\n",line_count, $$->getText().c_str());
+                        }
+                    |   IF LPAREN expression RPAREN statement {
+                                $$ = new SimpleText("if(" + $3->getName() + ")" + $5->getText());
+                                fprintf(logOut, "Line %d: statement : IF LPAREN expression RPAREN statement\n\n%s\n\n",line_count, $$->getText().c_str());
+                        }
+                    |   IF LPAREN expression RPAREN statement ELSE statement {
+                                $$ = new SimpleText("if(" + $3->getName() + ")" + $5->getText() + "else" + $7->getText());
+                                fprintf(logOut, "Line %d: statement : IF LPAREN expression RPAREN statement ELSE statement\n\n%s\n\n",line_count, $$->getText().c_str());
+                        }
+                    |   WHILE LPAREN expression RPAREN statement{
+                                $$ = new SimpleText("WHILE(" + $3->getName() + ")" + $5->getText());
+                                fprintf(logOut, "Line %d: statement : WHILE LPAREN expression RPAREN statement\n\n%s\n\n",line_count, $$->getText().c_str());
+                    }
+                    |   PRINTLN LPAREN ID RPAREN SEMICOLON{
+                                $$ = new SimpleText("println(" + $3->getName() + ");" );
+                                fprintf(logOut, "Line %d: statement : PRINTLN LPAREN ID RPAREN SEMICOLON\n\n%s\n\n",line_count, $$->getText().c_str());
+                    }
+                    |   RETURN expression SEMICOLON{
+                                $$ = new SimpleText("return " + $2->getName() +";" );
+                                fprintf(logOut, "Line %d: statement : IF LPAREN expression RPAREN statement\n\n%s\n\n",line_count, $$->getText().c_str());
+                    }
                     ;
 
 expression_statement:   SEMICOLON{
@@ -391,7 +451,7 @@ variable            :   ID{
                     |   ID LTHIRD expression RTHIRD{
                                 SymbolInfo * symbol = table.lookup($1->getName());
                                 //undeclared variable
-                                if(symbol){
+                                if(!symbol){
                                         fprintf(errorOut, "Error at line %d: Undeclared variable %s\n\n", line_count, $1->getName().c_str());
                                 }
                                 //not an array
@@ -423,7 +483,7 @@ expression          :   logic_expression{
 
 logic_expression    :   rel_expression {
                                 $$ = new SymbolInfo($1->getName(), "logic_expression");
-                                $$->setDataType("int");
+                                $$->setDataType($1->getDataType());
                                 fprintf(logOut, "Line %d: logic_expression : rel_expression\n\n%s\n\n",line_count, $$->getName().c_str());
 
                         }
@@ -436,11 +496,15 @@ logic_expression    :   rel_expression {
 
 rel_expression      :   simple_expression{
                                 $$ = new SymbolInfo($1->getName(), "rel_expression");
-                                $$->setDataType("int");
+                                $$->setDataType($1->getDataType());
                                 fprintf(logOut, "Line %d: rel_expression : simple_expression\n\n%s\n\n",line_count, $$->getName().c_str());
 
                         }
-                    |   simple_expression RELOP simple_expression
+                    |   simple_expression RELOP simple_expression {
+                                $$ = new SymbolInfo($1->getName() + $2->getName() + $3->getName(), "rel_expression");
+                                $$->setDataType("int");
+                                fprintf(logOut, "Line %d rel_expression : simple_expression RELOP simple_expression\n\n%s\n\n", line_count, $$->getName().c_str());
+                        }
                     ;
 
 simple_expression   :   term {
@@ -520,7 +584,10 @@ factor              :   variable  {
                                 else if(!func->getIsFunc()){
                                         fprintf(errorOut, "Error at line %d: Undeclared function %s\n\n", line_count, $1->getName().c_str());
                                 }
-                                $$ = new SymbolInfo($1->getName(), "factor");
+                                else if(!func->matchParamList($3)){
+                                        fprintf(errorOut, "Error at line %d: Function parameters do not match %s\n\n", line_count, $1->getName().c_str());
+                                }
+                                $$ = new SymbolInfo($1->getName()+"("+toStringArguments($3)+")", "factor");
                                 $$->setDataType($1->getReturnType());
                                 fprintf(logOut, "Line %d: factor : ID LPAREN argument_list RPAREN\n\n%s\n\n",line_count, $$->getName().c_str());
                                
@@ -555,12 +622,23 @@ factor              :   variable  {
                         }
                     ;
 
-argument_list       :   arguments 
+argument_list       :   arguments {
+                                $$ = new vector<SymbolInfo*>($1->begin(), $1->end());
+                                fprintf(logOut, "Line %d: arguments : arguments COMMA logic_expression\n\n%s\n\n", line_count, toStringArguments($$));
+                        }
                     |
                     ;
 
-arguments           :   arguments COMMA logic_expression
-                    |   logic_expression
+arguments           :   arguments COMMA logic_expression {
+                                $$ = new vector<SymbolInfo*>($1->begin(), $1->end());
+                                $$->push_back($3);
+                                fprintf(logOut, "Line %d: arguments : arguments COMMA logic_expression\n\n%s\n\n", line_count, toStringArguments($$));
+                        }
+                    |   logic_expression {
+                                $$ = new vector<SymbolInfo*>();
+                                $$->push_back($1);
+                                fprintf(logOut, "Line %d: arguments : logic_expression\n\n%s\n\n", line_count, toStringArguments($$));
+                        }
                     ;
 
 

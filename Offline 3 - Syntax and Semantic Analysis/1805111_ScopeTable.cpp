@@ -73,6 +73,7 @@ public:
         int cnt = 1;
         if(this->hashTable[hashIndex]==NULL){
             this->hashTable[hashIndex] = new SymbolInfo(symbol->getName(), symbol->getType());
+            this->hashTable[hashIndex]->clone(symbol);
             cnt = 0;
         }
         else{
@@ -84,6 +85,8 @@ public:
                 }    
                 curSymbol = curSymbol->getNextSymbol();
             }
+            // cout << "inserted  " << symbol->getName() << " " << symbol->parameterTypes[0] << endl;
+
             curSymbol->setNextSymbol(symbol);            
         }
         return true;

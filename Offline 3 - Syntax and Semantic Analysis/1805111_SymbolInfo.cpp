@@ -15,6 +15,8 @@ class SymbolInfo{
     vector<string> parameterTypes;
 
 public:
+
+
     SymbolInfo(){
 
     }
@@ -55,8 +57,26 @@ public:
     }
 
     void setNextSymbol(SymbolInfo * nextSymbol){
-        if(nextSymbol==NULL) this->nextSymbol = NULL;
-        else this->nextSymbol = new SymbolInfo(nextSymbol->getName(), nextSymbol->getType());
+        if(nextSymbol==NULL) {
+            // cout << nextSymbol->name << "  is null\n";
+            this->nextSymbol = NULL;
+        }
+        else {
+            this->nextSymbol = new SymbolInfo();
+            this->nextSymbol = nextSymbol;
+            for(int i=0;i<nextSymbol->parameterTypes.size();i++)
+                this->nextSymbol->parameterTypes[i] = nextSymbol->parameterTypes[i];
+            // this->nextSymbol->dataType = nextSymbol->dataType;
+            // this->nextSymbol->isFunc = nextSymbol->isFunc;
+            // this->nextSymbol->isFuncDefined = nextSymbol->isFuncDefined;
+            // this->nextSymbol->isArray = nextSymbol->isArray;
+            // this->nextSymbol->arrSize = nextSymbol->arrSize;
+            // this->nextSymbol->returnType = nextSymbol->returnType;
+            // for(int i=0;i<nextSymbol->parameterTypes.size();i++){
+            //     this->nextSymbol->parameterTypes[i] = nextSymbol->parameterTypes[i];
+            // }
+            // cout << "next symbol " <<nextSymbol->name << " " << this->nextSymbol->parameterTypes[0] << endl;
+        }
     }
 
     bool getIsFunc(){
@@ -86,11 +106,15 @@ public:
 
     void setParameters(vector<SymbolInfo*>* params){
         for(int i=0;i<params->size();i++){
-            this->parameterTypes.push_back(params->at(i)->getType());
+            this->parameterTypes.push_back(params->at(i)->getDataType());
+
+            // cout << this->name << " setting parametes " << parameterTypes.back() << endl;
         }
+        
     }
 
     void setReturnType(string returnType){
+        this->isFunc = true;
         this->returnType = returnType;
     }
 
@@ -99,9 +123,14 @@ public:
     }
 
     bool matchParamList(vector<SymbolInfo*>* params){
+        // cout << "pp\n" ;
+        // for(int i=0;i<this->parameterTypes.size();i++){
+        //     cout << parameterTypes[i] << endl;
+        // }
+
         if(params->size()!=this->parameterTypes.size()) return false;
         for(int i=0;i<this->parameterTypes.size();i++){
-            if(this->parameterTypes[i]!=params->at(i)->getType())
+            if(this->parameterTypes[i]!=params->at(i)->getDataType())
                 return false;
         }
         return true;
@@ -111,8 +140,17 @@ public:
         return name == this->returnType;
     }
 
+    void setIsFunc(){
+        this->isFunc = true;
+    }
+
     void setDefined(){
+        this->isFunc = true;
         this->isFuncDefined = true;
+    }
+
+    bool getDefined(){
+        return this->isFuncDefined;
     }
 
     string getDataType(){
@@ -121,6 +159,19 @@ public:
 
     void setDataType(string dataType){
         this->dataType = dataType;
+    }
+
+    void clone(SymbolInfo* symbol){
+        this->name = symbol->name;
+        this->type = symbol->type;
+        this->dataType = symbol->dataType;
+        this->isFunc = symbol->isFunc;
+        this->isFuncDefined = symbol->isFuncDefined;
+        this->returnType = symbol->returnType;
+        this->isArray = symbol->isArray;
+        this->arrSize = symbol->arrSize;
+        for(int i=0;i<symbol->parameterTypes.size();i++)
+            this->parameterTypes.push_back(symbol->parameterTypes[i]);
     }
 
 };
