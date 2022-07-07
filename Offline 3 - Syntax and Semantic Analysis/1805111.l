@@ -7,6 +7,7 @@
 %{
 #include<bits/stdc++.h>
 #include "1805111_SymbolTable.cpp"
+#include "SimpleText.cpp"
 #include "y.tab.h"
 #define YYSTYPE SymbolInfo*
 using namespace std;
@@ -287,24 +288,26 @@ Unterminated_CHARACTER ['](.|"\\t"|"\\n"|"\\"|"\\a"|"\\f"|"\\r"|"\\b"|"\\v"|"\\0
             }
 
 {RELOP}     {
+                SymbolInfo * info = new SymbolInfo(yytext, "RELOP");
+                yylval.symbolInfo = (YYSTYPE)info;
                 return RELOP;
 		    }
 
 {ADDOP}     {
-                // SymbolInfo * info = new SymbolInfo(yytext, "ADDOP");
-                // yylval.symbolInfo = (YYSTYPE)info;
+                SymbolInfo * info = new SymbolInfo(yytext, "ADDOP");
+                yylval.symbolInfo = (YYSTYPE)info;
                 return ADDOP;
             }
 
 {MULOP}     {
-                // SymbolInfo * info = new SymbolInfo(yytext, "MULOP");
-                // yylval.symbolInfo = (YYSTYPE)info;
+                SymbolInfo * info = new SymbolInfo(yytext, "MULOP");
+                yylval.symbolInfo = (YYSTYPE)info;
                 return MULOP;
             }
 
 {LOGICOP}   {
-                // SymbolInfo * info = new SymbolInfo(yytext, "LOGICOP");
-                // yylval.symbolInfo = (YYSTYPE)info;
+                SymbolInfo * info = new SymbolInfo(yytext, "LOGICOP");
+                yylval.symbolInfo = (YYSTYPE)info;
                 return LOGICOP;
             }
 
