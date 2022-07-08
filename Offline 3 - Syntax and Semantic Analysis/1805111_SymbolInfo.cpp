@@ -113,6 +113,14 @@ public:
         
     }
 
+    int getNumberOfParameters(){
+        return this->parameterTypes.size();
+    }
+
+    string getithParameter(int i){
+        return this->parameterTypes[i];
+    }
+
     void setReturnType(string returnType){
         this->isFunc = true;
         this->returnType = returnType;

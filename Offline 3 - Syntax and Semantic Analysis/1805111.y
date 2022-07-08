@@ -8,16 +8,13 @@
 
 #define YYDEBUG 1
 
-void yyerror(const char *s){
-	printf("%s\n",s);
-}
-
 SymbolTable table(31);
 FILE* inputFile;
 FILE* logOut;
 FILE* errorOut;
 extern FILE* yyin;
 extern int line_count;
+extern int error_count;
 
 int yylex(void);
 int yyparse(void);
@@ -106,9 +103,19 @@ void loadFromBuffer(){
         }
                 parameterBuffer.clear();       
 }
+
+void printError(string errorMsg){
+        fprintf(errorOut, "Error at line %d: %s\n\n", line_count, errorMsg.c_str());
+        fprintf(logOut, "Error at line %d: %s\n\n", line_count, errorMsg.c_str());
+        error_count++;
+}
+
+
+void yyerror(const char *s){
+	printError("syntax error");
+}
 %}
 
-%define parse.error verbose
 
 %union{ 
         SymbolInfo* symbolInfo;
@@ -123,9 +130,7 @@ void loadFromBuffer(){
 
 %token <symbolInfo> ID CONST_INT CONST_FLOAT CONST_CHAR ADDOP MULOP RELOP LOGICOP
 
-%type <symbolInfo> start variable type_specifier 
-%type <symbolInfo> expression_statement 
-%type <symbolInfo> unary_expression factor 
+%type <symbolInfo> start variable type_specifier expression_statement unary_expression factor 
 %type <symbolInfo> expression logic_expression simple_expression rel_expression term 
 %type <text> statement statements compound_statement func_definition unit program
 %type <multipleSymbols> declaration_list var_declaration parameter_list func_declaration argument_list arguments 
@@ -164,7 +169,7 @@ func_declaration    :   type_specifier ID LPAREN parameter_list RPAREN SEMICOLON
                                 $$->push_back($1);
                                 $$->push_back($2);
                                 if(table.lookup($2->getName())){
-                                        fprintf(errorOut, "Error at line %d: Multiple declaration of %s\n\n", line_count, $2->getName().c_str());
+                                        printError("Multiple declaration of function " + $2->getName());
                                 }
                                 map<string,int> params;
                                 for(int i=0;i<$4->size();i++){
@@ -172,7 +177,7 @@ func_declaration    :   type_specifier ID LPAREN parameter_list RPAREN SEMICOLON
                                         $$->push_back($4->at(i));
                                         string curName = $4->at(i)->getName();
                                         if(params[curName]!=0 && curName!="") 
-                                                fprintf(errorOut, "Error at line %d: Multiple declaration of %s in parameter\n\n", line_count, curName.c_str());
+                                                printError("Multiple declaration of " + curName +" in parameter");
                                         params[curName]++;
                                 }
                                 SymbolInfo* newFunction = new SymbolInfo($2->getName(), "ID");
@@ -189,7 +194,6 @@ func_declaration    :   type_specifier ID LPAREN parameter_list RPAREN SEMICOLON
                                 newFunction->setReturnType($1->getName());
                                 table.insert(newFunction);
                                 fprintf(logOut,"Line %d: func_declaration : type_specifier ID LPAREN RPAREN SEMICOLON\n\n%s\n\n", line_count, toStringFuncDeclaration($$).c_str());
-                                
                         }
                     ;
 
@@ -197,19 +201,29 @@ func_declaration    :   type_specifier ID LPAREN parameter_list RPAREN SEMICOLON
 func_definition     :   type_specifier ID LPAREN parameter_list RPAREN {
                                 parameterBuffer.clear();
                                 SymbolInfo * func = table.lookup($2->getName());
-                                if(!func){
+                                if(func){
                                         if(func->getIsFunc()){
                                                 if(func->getIsFuncDefined()){
                                                         // error :: redefinition of function
 
                                                 }
-                                                else if(!func->matchParamList($4) || !func->matchReturnType($1->getName())){
-                                                        // error :: function does not match signature
-                                                        fprintf(errorOut, "Error at Line %d: function signature do not match\n\n", line_count);
-                                                }
                                                 else {
                                                         func->setDefined();    
                                                         storeIntoBuffer($4);      
+                                                }
+                                                if(!func->matchReturnType($1->getName())){
+                                                        // error :: function does not match signature
+                                                        printError("Return type mismatch with function declaration in function " + $2->getName());
+                                                }
+                                                if(func->getNumberOfParameters()!=$4->size()){
+                                                        printError("Total number of arguments mismatch with declaration in function " + $2->getName());
+                                                }
+                                                else{
+                                                        for(int i=0;i<$4->size();i++){
+                                                                if($4->at(i)->getName()!=func->getithParameter(i)){
+                                                                        printError(to_string(i+1) + "th parameter's name not given in function definition of " + $2->getName());
+                                                                }
+                                                        }
                                                 }
                                         }
                                         else{
@@ -217,7 +231,10 @@ func_definition     :   type_specifier ID LPAREN parameter_list RPAREN {
                                         }
                                 }
                                 else{
-                                        func->setDefined();    
+                                        SymbolInfo* newFunction = new SymbolInfo($2->getName(), $2->getType());
+                                        newFunction->setParameters($4);
+                                        newFunction->setReturnType($1->getName());
+                                        table.insert(newFunction);
                                         storeIntoBuffer($4);      
                                 }
 
@@ -230,35 +247,43 @@ func_definition     :   type_specifier ID LPAREN parameter_list RPAREN {
                       
                         }
                     |   type_specifier ID LPAREN RPAREN compound_statement {
-                                $$ = new SimpleText();
+                                parameterBuffer.clear();
                                 SymbolInfo * func = table.lookup($2->getName());
-                                if(!func){
+                                if(func){
                                         if(func->getIsFunc()){
                                                 if(func->getIsFuncDefined()){
                                                         // error :: redefinition of function
 
                                                 }
-                                                else if(!func->matchParamList(new vector<SymbolInfo*>) || !func->matchReturnType($1->getName())){
-                                                        // error :: function does not match signature
-                                                }
                                                 else {
-                                                        func->setDefined();          
-                                                        $$->appendText($1->getName() + " " + $2->getName());
-                                                        $$->appendText("()");
-                                                        $$->appendText($5->getText()); 
+                                                        func->setDefined();    
                                                 }
+                                                if(!func->matchReturnType($1->getName())){
+                                                        // error :: function does not match signature
+                                                        printError("Return type mismatch with function declaration in function " + $2->getName());
+                                                }
+                                                if(func->getNumberOfParameters()!=0){
+                                                        printError("Total number of arguments mismatch with declaration in function " + $2->getName());
+                                                }
+                                                
                                         }
                                         else{
                                                 //error :: not a function
                                         }
                                 }
                                 else{
-                                        func->setDefined();          
-                                        $$->appendText($1->getName() + " " + $2->getName());
-                                        $$->appendText("()");
-                                        $$->appendText($5->getText()); 
+                                        SymbolInfo* newFunction = new SymbolInfo($2->getName(), $2->getType());
+                                        newFunction->setReturnType($1->getName());
+                                        table.insert(newFunction);
+                                         
                                 }
+                                $$ = new SimpleText();
+                                $$->appendText($1->getName() + " " + $2->getName());
+                                $$->appendText("()");
+                                $$->appendText($5->getText()); 
                                 fprintf(logOut,"Line %d: func_definition : type_specifier ID LPAREN parameter_list RPAREN compound_statement \n\n%s\n\n", line_count, $$->getText().c_str());
+                      
+
                         }
                     ;
 
@@ -313,13 +338,12 @@ var_declaration     : type_specifier declaration_list SEMICOLON {
                                 // variable type cannot be void
                                 if($1->getType()=="VOID") {
                                         fprintf(errorOut, "Void variables\n");
-                                        
                                 }
                                 else{
                                         for(int i=0;i<$2->size();i++){
                                                 $$->push_back($2->at(i));
                                                 if(table.lookup($2->at(i)->getName())){
-                                                        fprintf(errorOut, "Error at line %d: Multiple declaration of %s\n\n", line_count, $2->at(i)->getName().c_str());
+                                                        printError("Multiple declaration of " + $2->at(i)->getName());
                                                 }
                                                 else{
                                                         $2->at(i)->setDataType($1->getName());
@@ -420,7 +444,7 @@ statement           :   var_declaration{
                                 fprintf(logOut, "Line %d: statement : PRINTLN LPAREN ID RPAREN SEMICOLON\n\n%s\n\n",line_count, $$->getText().c_str());
                     }
                     |   RETURN expression SEMICOLON{
-                                $$ = new SimpleText("return " + $2->getName() +";" );
+                                $$ = new SimpleText("return " + $2->getName() +";\n" );
                                 fprintf(logOut, "Line %d: statement : IF LPAREN expression RPAREN statement\n\n%s\n\n",line_count, $$->getText().c_str());
                     }
                     ;
@@ -440,25 +464,29 @@ variable            :   ID{
                                 //undeclared variable
                                 SymbolInfo * symbol = table.lookup($1->getName());
                                 if(!symbol){
-                                        fprintf(errorOut, "Error at line %d: Undeclared variable %s\n\n", line_count, $1->getName().c_str());
+                                        printError("Undeclared variable " + $1->getName());
                                 }      
-                                $$ = new SymbolInfo($1->getName(), symbol->getType());
-                                $$->setDataType(symbol->getDataType());
-                                // cout << "variable dt " << symbol->getName() << " d" << symbol->getDataType() << endl;
-
+                                else if(symbol->getIsArray()){
+                                        printError("Type mismatch, " + symbol->getName() + " is an array");
+                                }
+                                $$ = new SymbolInfo($1->getName(), $1->getType());
+                                if(symbol) $$->setDataType(symbol->getDataType());
                                 fprintf(logOut, "Line %d: variable : ID\n\n%s\n\n",line_count, $$->getName().c_str());
                         }
                     |   ID LTHIRD expression RTHIRD{
                                 SymbolInfo * symbol = table.lookup($1->getName());
-                                //undeclared variable
                                 if(!symbol){
-                                        fprintf(errorOut, "Error at line %d: Undeclared variable %s\n\n", line_count, $1->getName().c_str());
+                                //error :: undeclared variable
+                                        printError("Undeclared variable " + $1->getName());
                                 }
-                                //not an array
                                 else if(!symbol->getIsArray()){
-                                        fprintf(errorOut, "Error at line %d: %s not an array\n\n", line_count, $1->getName().c_str());
+                                //error :: not an array
+                                        printError("Type mismatch, " + $1->getName() + " not an array");
                                 }
-                                //implement index not integer
+                                else if($3->getDataType()!="int"){
+                                //error :: index not integer
+                                        printError("Expression inside third brackets not an integer");
+                                }
                                 $$ = new SymbolInfo($1->getName()+"["+$3->getName()+"]", symbol->getType());
                                 $$->setDataType(symbol->getDataType());
 
@@ -624,20 +652,23 @@ factor              :   variable  {
 
 argument_list       :   arguments {
                                 $$ = new vector<SymbolInfo*>($1->begin(), $1->end());
-                                fprintf(logOut, "Line %d: arguments : arguments COMMA logic_expression\n\n%s\n\n", line_count, toStringArguments($$));
+                                fprintf(logOut, "Line %d: argument_list : arguments\n\n%s\n\n", line_count, toStringArguments($$).c_str());
                         }
-                    |
+                    | {
+                        $$ = new vector<SymbolInfo*>();
+                        fprintf(logOut, "Line %d: argument_list : arguments\n\n%s\n\n", line_count, toStringArguments($$).c_str());
+                    }
                     ;
 
 arguments           :   arguments COMMA logic_expression {
                                 $$ = new vector<SymbolInfo*>($1->begin(), $1->end());
                                 $$->push_back($3);
-                                fprintf(logOut, "Line %d: arguments : arguments COMMA logic_expression\n\n%s\n\n", line_count, toStringArguments($$));
+                                fprintf(logOut, "Line %d: arguments : arguments COMMA logic_expression\n\n%s\n\n", line_count, toStringArguments($$).c_str());
                         }
                     |   logic_expression {
                                 $$ = new vector<SymbolInfo*>();
                                 $$->push_back($1);
-                                fprintf(logOut, "Line %d: arguments : logic_expression\n\n%s\n\n", line_count, toStringArguments($$));
+                                fprintf(logOut, "Line %d: arguments : logic_expression\n\n%s\n\n", line_count, toStringArguments($$).c_str());
                         }
                     ;
 
