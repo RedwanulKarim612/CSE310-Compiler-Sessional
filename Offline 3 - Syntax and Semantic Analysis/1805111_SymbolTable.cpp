@@ -57,6 +57,7 @@ public:
     }
 
     bool insert(SymbolInfo * newSymbol){
+        // cout << newSymbol->getName() << " " << this->curScopeTable->getScopeId() << endl;
         if(!this->curScopeTable){
             this->curScopeTable = new ScopeTable(this->totalBuckets, curScopeTable);
         }
@@ -86,6 +87,10 @@ public:
         return NULL;
     }
 
+    SymbolInfo * lookupCurrentScopeTable(string name){
+        return curScopeTable->lookup(name);
+    }
+
     ~ SymbolTable(){
         this->totalBuckets = -1;
         while(this->curScopeTable){
@@ -93,6 +98,10 @@ public:
             delete this->curScopeTable;
             this->curScopeTable = parent;
         }
+    }
+
+    bool isGlobalScope(){
+        return this->curScopeTable->getScopeId()=="1";
     }
 
 };

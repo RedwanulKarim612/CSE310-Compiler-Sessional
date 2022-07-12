@@ -142,7 +142,7 @@ public:
     }
 
     void print(FILE *logout){
-        fprintf(logout, "ScopeTable # %s\n", scopeId.c_str());
+        fprintf(logout, "\n\nScopeTable # %s\n", scopeId.c_str());
         for(int i=0;i<this->totalBuckets;i++){
             SymbolInfo *curSymbol  = this->hashTable[i];
             if(curSymbol==NULL) continue;

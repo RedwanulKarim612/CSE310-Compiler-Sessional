@@ -73,7 +73,7 @@ LETTER [a-zA-Z]
 DIGIT [0-9]
 INCOP ("++")
 DECOP ("--")
-RELOP (">"|"<="|">"|">="|"=="|"!=")
+RELOP ("\>"|"<="|"\<"|">="|"=="|"!=")
 ASSIGNOP [=]
 LOGICOP ("&&"|"||")
 NOT [!]
@@ -171,6 +171,10 @@ Unterminated_CHARACTER ['](.|"\\t"|"\\n"|"\\"|"\\a"|"\\f"|"\\r"|"\\b"|"\\v"|"\\0
 "continue"  {
                 return CONTINUE;
 		    }
+
+"printf"    {
+                return PRINTLN;
+            }
 
 ["] {
                 // BEGIN STRING_SCANNING_STATE;

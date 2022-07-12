@@ -169,6 +169,7 @@ public:
         this->dataType = dataType;
     }
 
+
     void clone(SymbolInfo* symbol){
         this->name = symbol->name;
         this->type = symbol->type;
