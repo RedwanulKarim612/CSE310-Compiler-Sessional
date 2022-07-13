@@ -148,12 +148,12 @@ bool multpipleParameterDeclaration(vector<SymbolInfo*>* parameterList, string na
 }
 
 %token BREAK CASE CONTINUE DEFAULT RETURN SWITCH VOID CHAR DOUBLE FLOAT INT DO WHILE FOR IF ELSE
-%token INCOP DECOP ASSIGNOP NOT LPAREN RPAREN LCURL RCURL LTHIRD RTHIRD NEWLINE COMMA SEMICOLON PRINTLN
-%token <symbolInfo> ID CONST_INT CONST_FLOAT CONST_CHAR ADDOP MULOP RELOP LOGICOP
+%token INCOP DECOP ASSIGNOP NOT LPAREN RPAREN LCURL RCURL LTHIRD RTHIRD NEWLINE COMMA SEMICOLON PRINTLN 
+%token <symbolInfo> ID CONST_INT CONST_FLOAT CONST_CHAR ADDOP MULOP RELOP LOGICOP UNREC_CHAR
 
 %type <symbolInfo> start variable type_specifier expression_statement unary_expression factor 
 %type <symbolInfo> expression logic_expression simple_expression rel_expression term 
-%type <text> statement statements compound_statement func_definition unit program
+%type <text> statement statements compound_statement func_definition unit program 
 %type <multipleSymbols> declaration_list var_declaration parameter_list func_declaration argument_list arguments 
 
 %nonassoc LOWER_THAN_ELSE
@@ -185,7 +185,7 @@ unit    :   var_declaration{
         |   func_definition{
                         $$ = new SimpleText($1->getText());
                         fprintf(logOut,"Line %d: unit : func_definition\n\n%s\n\n", line_count, $$->getText().c_str());
-                }       
+                }      
         ;
 
 func_declaration    :   type_specifier ID LPAREN parameter_list RPAREN SEMICOLON{
@@ -222,6 +222,9 @@ func_declaration    :   type_specifier ID LPAREN parameter_list RPAREN SEMICOLON
                                 if(!table.isGlobalScope()){
                                         printError("illegal scoping of function " + $2->getName());
                                 }
+                                $$ = new vector<SymbolInfo*>();
+                                $$->push_back($1);
+                                $$->push_back($2);
                                 SymbolInfo* newFunction = new SymbolInfo($2->getName(), "ID");
                                 newFunction->setReturnType($1->getName());
                                 table.insert(newFunction);
@@ -376,6 +379,11 @@ parameter_list      :   parameter_list COMMA type_specifier ID{
                                 $$->push_back(s);
                                 fprintf(logOut,"Line %d: parameter_list : type_specifier\n\n%s\n\n", line_count, toStringParameterList($$).c_str());
                         }
+                    |   parameter_list error {
+                                $$ = new vector<SymbolInfo*>($1->begin(), $1->end());
+                                yyclearin;
+                                yyerrok;
+                        }
                     ;
 
 compound_statement   :   LCURL {table.enterScope();loadFromBuffer();} statements RCURL  {
@@ -470,6 +478,10 @@ declaration_list    :   declaration_list COMMA ID{
                                 }
                                 fprintf(logOut, "Line %d: declaration_list : ID LTHIRD CONST_INT RTHIRD\n\n%s\n\n",line_count, toStringDeclarationList($$).c_str());
                         }
+                    |   declaration_list error {
+                                $$ = new vector<SymbolInfo*>($1->begin(), $1->end());
+                                yyclearin;
+                        }    
                     ;
 
 statements          :   statement {
@@ -526,6 +538,9 @@ statement           :   var_declaration{
                                 $$ = new SimpleText("return " + $2->getName() +";\n" );
                                 fprintf(logOut, "Line %d: statement : RETURN expression SEMICOLON\n\n%s\n\n",line_count, $$->getText().c_str());
                         }
+                    |   error statement{
+                                $$ = new SimpleText($2->getText());
+                        }    
                     ;
 
 expression_statement:   SEMICOLON{
@@ -537,6 +552,12 @@ expression_statement:   SEMICOLON{
                                 $$ = new SymbolInfo($1->getName() + ";\n", "expression_statement");
                                 fprintf(logOut, "Line %d: expression_statement : expression SEMICOLON\n\n%s\n\n",line_count, $$->getName().c_str());
                         }
+                    
+                    |   UNREC_CHAR{
+                                $$ = new SymbolInfo();
+                                printError("Unrecognized character " + $1->getName());
+                                
+                        }    
                     ;
                 
 variable            :   ID{
@@ -674,7 +695,7 @@ term                :   unary_expression{
 
                                 }
                                 fprintf(logOut, "%s\n\n", $$->getName().c_str());
-                        }    
+                        }      
                     ;
 
 unary_expression    :   ADDOP unary_expression{
@@ -757,6 +778,7 @@ factor              :   variable  {
                                 fprintf(logOut, "Line %d: factor : variable DECOP\n\n%s\n\n",line_count, $$->getName().c_str());
                                 
                         }
+                    
                     ;
 
 argument_list       :   arguments {
@@ -780,6 +802,7 @@ arguments           :   arguments COMMA logic_expression {
                                 fprintf(logOut, "Line %d: arguments : logic_expression\n\n%s\n\n", line_count, toStringArguments($$).c_str());
                         }
                     ;
+
 
 %%
 

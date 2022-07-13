@@ -173,7 +173,7 @@ Unterminated_CHARACTER ['](.|"\\t"|"\\n"|"\\"|"\\a"|"\\f"|"\\r"|"\\b"|"\\v"|"\\0
 		    }
 
 "printf"    {
-                return PRINTLN;
+                 return PRINTLN;
             }
 
 ["] {
@@ -402,8 +402,11 @@ Unterminated_CHARACTER ['](.|"\\t"|"\\n"|"\\"|"\\a"|"\\f"|"\\r"|"\\b"|"\\v"|"\\0
 
     .     {
             //     fprintf(logout, "Error at line no %d: Unrecognized character %s\n\n", line_count, yytext);
-            //     error_count++;
-            // 
+            // error_count++;
+            //
+            SymbolInfo * info = new SymbolInfo(yytext, "unrecognized");
+            yylval.symbolInfo = (YYSTYPE)info;
+            return UNREC_CHAR;
         }
 
     <<EOF>>     {
