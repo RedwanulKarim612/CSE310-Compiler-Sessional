@@ -222,6 +222,9 @@ func_declaration    :   type_specifier ID LPAREN parameter_list RPAREN SEMICOLON
                                 if(!table.isGlobalScope()){
                                         printError("illegal scoping of function " + $2->getName());
                                 }
+                                if(table.lookup($2->getName())){
+                                        printError("Multiple declaration of function " + $2->getName());
+                                }
                                 $$ = new vector<SymbolInfo*>();
                                 $$->push_back($1);
                                 $$->push_back($2);
@@ -240,16 +243,17 @@ func_definition     :   type_specifier ID LPAREN parameter_list RPAREN {
                                         printError("illegal scoping of function " + $2->getName());
                                 }
                                 curReturnType=$1->getName();
-                                // cout << "FUNC " << $2->getName() << "\n";
                                 storeIntoBuffer($4);      
                                 SymbolInfo * func = table.lookup($2->getName());
                                 if(func){
                                         if(func->getIsFunc()){
+
                                                 if(func->getIsFuncDefined()){
                                                         // error :: redefinition of function
-
+                                                        printError("Redefinition of function");
                                                 }
                                                 else {
+                                                        // cout << func->getIsFuncDefined();
                                                         func->setDefined();    
                                                 }
                                                 if(!func->matchReturnType($1->getName())){
@@ -280,26 +284,17 @@ func_definition     :   type_specifier ID LPAREN parameter_list RPAREN {
                                         SymbolInfo* newFunction = new SymbolInfo($2->getName(), $2->getType());
                                         newFunction->setParameters($4);
                                         newFunction->setReturnType($1->getName());
-                                        table.insert(newFunction);      
+                                        newFunction->setDefined();
+                                        table.insert(newFunction);    
                                 }
                                 map<string,int> params;
-                                                        // cout << $4->size() << " size\n";
-                                // for(int i=0;i<$4->size();i++){
-                                //         string curName = $4->at(i)->getName();
-                                //         if(params[curName]!=0 && curName!="") {
-                                //                 printError("Multiple declaration of " + curName +" in parameter");
-
-                                //         }
-                                //         params[curName]++;
-                                //         // cout << curName << " mm " << params[curName] << endl;
-                                // }
 
                         } compound_statement {
 
                                 $$ = new SimpleText();
                                 $$->appendText($1->getName() + " " + $2->getName());
                                 $$->appendText("(" + toStringParameterList($4) +")");
-                                $$->appendText($7->getText()); 
+                                $$->appendText($7->getText()+"\n"); 
                                 curReturnType = "";
                                 fprintf(logOut,"Line %d: func_definition : type_specifier ID LPAREN parameter_list RPAREN compound_statement\n\n%s\n\n", line_count,$$->getText().c_str());
                         }
@@ -313,7 +308,7 @@ func_definition     :   type_specifier ID LPAREN parameter_list RPAREN {
                                         if(func->getIsFunc()){
                                                 if(func->getIsFuncDefined()){
                                                         // error :: redefinition of function
-
+                                                        printError("Redefinition of function");
                                                 }
                                                 else {
                                                         func->setDefined();    
@@ -328,19 +323,22 @@ func_definition     :   type_specifier ID LPAREN parameter_list RPAREN {
                                                 
                                         }
                                         else{
+                                                printError("Multiple declaration of "+ $2->getName());
+
                                                 //error :: not a function
                                         }
                                 }
                                 else{
                                         SymbolInfo* newFunction = new SymbolInfo($2->getName(), $2->getType());
                                         newFunction->setReturnType($1->getName());
+                                        newFunction->setDefined();
                                         table.insert(newFunction);
                                 }
                                 }  compound_statement {
                                         $$ = new SimpleText();
                                         $$->appendText($1->getName() + " " + $2->getName());
                                         $$->appendText("()");
-                                        $$->appendText($6->getText()); 
+                                        $$->appendText($6->getText()+"\n"); 
                                         curReturnType="";
                                         fprintf(logOut,"Line %d: func_definition : type_specifier ID LPAREN RPAREN compound_statement\n\n%s\n\n",line_count, $$->getText().c_str());
                                 }
@@ -493,6 +491,9 @@ statements          :   statement {
                                 fprintf(logOut, "Line %d: statements : statements statement\n\n%s\n\n",line_count, $$->getText().c_str());
 
                         }
+                    |   statements error{
+                                $$ = new SimpleText($1->getText());
+                        }    
                     ;
 
 statement           :   var_declaration{
@@ -526,21 +527,29 @@ statement           :   var_declaration{
                         }
                     |   PRINTLN LPAREN ID RPAREN SEMICOLON{
                                 $$ = new SimpleText("printf(" + $3->getName() + ");\n" );
+                                fprintf(logOut, "Line %d: statement : PRINTLN LPAREN ID RPAREN SEMICOLON\n\n",line_count, $$->getText().c_str());
                                 if(!table.lookup($3->getName())) printError("Undeclared variable " + $3->getName());
-                                fprintf(logOut, "Line %d: statement : PRINTLN LPAREN ID RPAREN SEMICOLON\n\n%s\n\n",line_count, $$->getText().c_str());
+                                fprintf(logOut,"%s\n\n",$$->getText().c_str());
+
                         }
                     |   RETURN expression SEMICOLON{
-                                if((curReturnType=="void" && $2->getName()!="") || curReturnType!=$2->getDataType()){
+                                if(curReturnType=="void"){
                                         // cout << "return type " << curReturnType << " " << $2->getDataType() << endl; 
-                                        printError("type mismatch, wrong return type");
+                                        printError("Type mismatch, wrong return type");
+                                }
+                                else if(curReturnType=="int" && $2->getDataType()=="float"){                               
+                                        printError("Type mismatch, wrong return type");
+                                }
+                                else if(curReturnType=="float" && $2->getDataType()=="int"){
+                                        $2->setDataType("float");
                                 }
                                 curReturnType = "";
                                 $$ = new SimpleText("return " + $2->getName() +";\n" );
                                 fprintf(logOut, "Line %d: statement : RETURN expression SEMICOLON\n\n%s\n\n",line_count, $$->getText().c_str());
                         }
-                    |   error statement{
+                    /* |   error statement{
                                 $$ = new SimpleText($2->getText());
-                        }    
+                        }     */
                     ;
 
 expression_statement:   SEMICOLON{
@@ -586,7 +595,7 @@ variable            :   ID{
                                 else if(!symbol->getIsArray()){
                                 //error :: not an array
                                         // cout << symbol->getName() << " " << symbol->getDataType() << endl;
-                                        printError("Type mismatch, " + $1->getName() + " not an array");
+                                        printError($1->getName() + " not an array");
                                 }
                                 else if($3->getDataType()!="int"){
                                 //error :: index not integer
@@ -612,7 +621,7 @@ expression          :   logic_expression{
 
                                 $$->setDataType($1->getDataType());
                                 if($1->getDataType()=="int" && $3->getDataType()=="float"){
-                                        printError("Type mismatch");
+                                        printError("Type Mismatch");
                                 }
                                 if($3->getDataType()=="void"){
                                         printError("Void function used in expression");
@@ -739,7 +748,7 @@ factor              :   variable  {
                                 }
                                 else {
                                         for(int i=0;i<$3->size();i++){
-                                                if($3->at(i)->getDataType()!=func->getithParameter(i)){
+                                                if($3->at(i)->getDataType()!=func->getithParameter(i) && func->getithParameter(i)!="float"){
                                                         printError(to_string(i+1) + "th argument mismatch in function " + $1->getName());
                                                         break;
                                                 }
@@ -806,9 +815,9 @@ arguments           :   arguments COMMA logic_expression {
 
 %%
 
-int main()
+int main(int argc,char *argv[])
 {
-	if((inputFile=fopen("input.txt","r"))==NULL)
+	if((inputFile=fopen(argv[1],"r"))==NULL)
 	{
 		printf("Cannot Open Input File.\n");
 		exit(1);

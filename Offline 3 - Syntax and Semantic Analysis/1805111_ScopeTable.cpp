@@ -52,8 +52,8 @@ public:
         return this->parentScope;
     }
 
-    uint32_t sdbm(string str){
-        uint32_t hash = 0;
+    uint64_t sdbm(string str){
+        uint64_t hash = 0;
         int c;
 
         int i = 0;
@@ -148,7 +148,7 @@ public:
             if(curSymbol==NULL) continue;
             fprintf(logout, " %d --> ", i);
             while(curSymbol!=NULL){
-                fprintf(logout, "<%s : %s> ", curSymbol->getName().c_str(), curSymbol->getType().c_str());
+                fprintf(logout, "<%s , %s> ", curSymbol->getName().c_str(), curSymbol->getType().c_str());
                 curSymbol = curSymbol->getNextSymbol();
             }
             fprintf(logout, "\n");
