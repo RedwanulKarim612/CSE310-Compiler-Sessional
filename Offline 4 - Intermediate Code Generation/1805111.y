@@ -22,11 +22,23 @@ extern int line_count;
 extern int error_count;
 int offset = 0;
 int parametersOnStack = 0;
+int labelCount=0;
+int tempCount=0;
+bool arrayElement = false;
+bool lop = true;
+
 int yylex(void);
 int yyparse(void);
 
 vector<SymbolInfo*> parameterBuffer;
 string curReturnType = "";
+
+string newLabel(){
+        string tmp ="L_";
+        tmp+=to_string(labelCount);
+        labelCount++;
+        return tmp;
+}
 
 string toStringDeclarationList(vector<SymbolInfo*>* symbols){
         string ans = "";
@@ -146,6 +158,15 @@ bool multpipleParameterDeclaration(vector<SymbolInfo*>* parameterList, string na
                 }
         }
         return false;
+}
+
+string getJmpIns(string relop){
+        if(relop=="\>") return "JG";
+        else if(relop=="\<") return "JL";
+        else if(relop==">=") return "JGE";
+        else if(relop=="<=") return "JLE";
+        else if(relop=="==") return "JE";
+        else return "JNE";
 }
 
 %}
@@ -554,7 +575,7 @@ statement           :   var_declaration{
                     |   expression_statement {
                                 $$ = new SimpleText($1->getName());
                                 fprintf(logOut, "Line %d: statement : expression_statement\n\n%s\n\n",line_count, $$->getText().c_str());
-
+                                lop = true;
                         }
                     |   compound_statement{
                                 $$ = new SimpleText($1->getText());
@@ -639,8 +660,9 @@ variable            :   ID{
                                         // cout << symbol->getName() << " " << symbol->getRegister() << endl;
                                 }
                                 fprintf(logOut, "%s\n\n", $$->getName().c_str());
+                                arrayElement = false;
                         }
-                    |   ID LTHIRD expression RTHIRD{
+                    |   ID LTHIRD expression {if(lop)fprintf(asmCodeFile, "PUSH CX\n");} RTHIRD{
                                 SymbolInfo * symbol = table.lookup($1->getName());
                                 fprintf(logOut, "Line %d: variable : ID LTHIRD expression RTHIRD\n\n",line_count);
 
@@ -658,9 +680,9 @@ variable            :   ID{
                                         printError("Expression inside third brackets not an integer");
                                 }
                                 $$ = new SymbolInfo($1->getName()+"["+$3->getName()+"]", symbol->getType());
-                                $$->setDataType(symbol->getDataType());
-
-                                fprintf(logOut, "%s\n\n", $$->getName().c_str());
+                                arrayElement = true;           
+                                if(symbol->getName()!=symbol->getRegister()) $$->setRegister("PTR WORD [BP]");
+                                else $$->setRegister("PTR WORD " + symbol->getName() + "[BX]");
                         }
                     ;
 
@@ -671,23 +693,40 @@ expression          :   logic_expression{
                                 fprintf(logOut, "Line %d: expression : logic expression\n\n%s\n\n",line_count, $$->getName().c_str());
 
                         }
-                    |   variable ASSIGNOP logic_expression {
+                    |   variable ASSIGNOP {lop=false;}logic_expression {
                                 // perform type check
-                                $$ = new SymbolInfo($1->getName() + "=" + $3->getName(), "expression");
+                                $$ = new SymbolInfo($1->getName() + "=" + $4->getName(), "expression");
                                 fprintf(logOut, "Line %d: expression : variable ASSIGNOP logic_expression\n\n",line_count);
 
                                 $$->setDataType($1->getDataType());
-                                if($1->getDataType()=="int" && $3->getDataType()=="float"){
+                                if($1->getDataType()=="int" && $4->getDataType()=="float"){
                                         printError("Type Mismatch");
                                 }
-                                if($3->getDataType()=="void"){
+                                if($4->getDataType()=="void"){
                                         printError("Void function used in expression");
                                 }
                                 string tmp = "";
-                                SymbolInfo * s = table.lookup($1->getName());
-                                tmp+="MOV " + s->getRegister() +", " + $3->getRegister() +"\n";
-                                fprintf(asmCodeFile, tmp.c_str());
-                                // cout << $1->getName() << " " << $3->getDataType() << endl;
+                                string name = $1->getName();
+                                for(int i=0;i<name.size();i++){
+                                        if(name[i]=='[') break;
+                                        tmp+=name[i];
+                                }
+                                SymbolInfo * s = table.lookup(tmp); 
+                                if(s->getIsArray()){
+                                        fprintf(asmCodeFile, "POP AX\nXCHG AX,CX\n");
+                                        if(tmp==s->getRegister()){
+                                                fprintf(asmCodeFile, "SAL CX, 1\nMOV BX,CX\nMOV CX, AX\n");
+                                        }
+                                        else {
+                                                fprintf(asmCodeFile, "PUSH BP\nSAL CX, 1\nADD CX, %d\nADD BP, CX\nMOV CX, AX\n", s->getPositionOnStack());
+                                        }
+                                }
+                                string t="MOV " + $1->getRegister() +", " + $4->getRegister() +"\n";
+                               
+                                fprintf(asmCodeFile, t.c_str());
+                                if(s->getIsArray() && tmp!=s->getRegister()){
+                                        fprintf(asmCodeFile, "POP BP\n");
+                                }
                                 fprintf(logOut, "%s\n\n", $$->getName().c_str());
                         }
                     ;
@@ -713,12 +752,25 @@ rel_expression      :   simple_expression{
                                 fprintf(logOut, "Line %d: rel_expression : simple_expression\n\n%s\n\n",line_count, $$->getName().c_str());
 
                         }
-                    |   simple_expression RELOP simple_expression {
+                    |   simple_expression {
+                                fprintf(asmCodeFile, "PUSH CX\n");
+                        } RELOP simple_expression {
                                 // cout << "RELOP\n";
-                                $$ = new SymbolInfo($1->getName() + $2->getName() + $3->getName(), "rel_expression");
+                                $$ = new SymbolInfo($1->getName() + $3->getName() + $4->getName(), "rel_expression");
                                 $$->setDataType("int");
                                 fprintf(logOut, "Line %d: rel_expression : simple_expression RELOP simple_expression\n\n%s\n\n", line_count, $$->getName().c_str());
-
+                                fprintf(asmCodeFile, "POP AX\n");
+                                fprintf(asmCodeFile, "CMP AX, CX\n");
+                                string label1 = newLabel();
+                                string endLabel = newLabel();
+                                string jumpIns = getJmpIns($3->getName());
+                                fprintf(asmCodeFile, "%s %s\n", jumpIns.c_str(), label1.c_str());
+                                fprintf(asmCodeFile, "MOV CX, 0\n");
+                                fprintf(asmCodeFile, "JMP %s\n", endLabel.c_str());
+                                fprintf(asmCodeFile, "%s:\n", label1.c_str());
+                                fprintf(asmCodeFile, "MOV CX, 1\n");
+                                fprintf(asmCodeFile, "%s:\n", endLabel.c_str());
+                                $$->setRegister("CX");
                         }
                     ;
 
@@ -808,7 +860,33 @@ factor              :   variable  {
                                 $$ = new SymbolInfo($1->getName(), "factor");
                                 $$->setDataType($1->getDataType());
                                 $$->setRegister("CX");
+
+                                string tmp="";
+                                string name = $1->getName();
+                                for(int i=0;i<name.size();i++){
+                                        if(name[i]!='[') tmp+=name[i];
+                                        else break;
+                                }
+                                SymbolInfo *s = table.lookup(tmp);
+                                bool localArray = false;
+                                if(arrayElement){
+                                        if(s){  
+                                                if(tmp!=s->getRegister()){
+                                                        localArray =  true;
+                                                        fprintf(asmCodeFile, "PUSH BP\nSAL CX, 1\n");
+                                                        fprintf(asmCodeFile, "ADD CX, %d\n",s->getPositionOnStack());
+                                                        fprintf(asmCodeFile, "ADD BP, CX\n");
+                                                        $$->setRegister("CX");
+                                                }
+                                                else{
+                                                        fprintf(asmCodeFile, "SAL CX , 1\nMOV BX , CX\n");
+                                                        $$->setRegister("CX");
+                                                }
+                                        }
+                                        arrayElement = false;
+                                }
                                 fprintf(asmCodeFile, "MOV CX, %s\n", $1->getRegister().c_str());
+                                if(localArray) fprintf(asmCodeFile, "POP BP\n");
                                 fprintf(logOut, "Line %d: factor : variable\n\n%s\n\n",line_count, $$->getName().c_str());
                         }  
                     |   ID LPAREN argument_list RPAREN {
