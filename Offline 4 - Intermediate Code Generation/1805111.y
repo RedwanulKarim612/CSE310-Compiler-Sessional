@@ -26,6 +26,18 @@ int labelCount=0;
 int tempCount=0;
 bool arrayElement = false;
 bool lop = true;
+string curLoopStartLabel;
+string curLoopEndLabel;
+string curLoopStatementLabel;
+string curLoopIncLabel;
+
+string logicalExpEnd;
+string logicalExpFalse;
+bool insideForLoop = false;
+string expressionCode = "";
+string ifFalseLabel;
+string ifEndLabel;
+stack<string> endIfLabels;
 
 int yylex(void);
 int yyparse(void);
@@ -161,8 +173,8 @@ bool multpipleParameterDeclaration(vector<SymbolInfo*>* parameterList, string na
 }
 
 string getJmpIns(string relop){
-        if(relop=="\>") return "JG";
-        else if(relop=="\<") return "JL";
+        if(relop==">") return "JG";
+        else if(relop=="<") return "JL";
         else if(relop==">=") return "JGE";
         else if(relop=="<=") return "JLE";
         else if(relop=="==") return "JE";
@@ -183,7 +195,7 @@ string getJmpIns(string relop){
 
 %type <symbolInfo> start variable type_specifier expression_statement unary_expression factor 
 %type <symbolInfo> expression logic_expression simple_expression rel_expression term 
-%type <text> statement statements compound_statement func_definition unit program 
+%type <text> statement statements compound_statement func_definition unit program if_condition
 %type <multipleSymbols> declaration_list var_declaration parameter_list func_declaration argument_list arguments 
 
 %nonassoc LOWER_THAN_ELSE
@@ -568,6 +580,18 @@ statements          :   statement {
                         }    
                     ;
 
+if_condition        :   IF LPAREN expression RPAREN  
+                        { 
+                                ifFalseLabel = newLabel();
+                                ifEndLabel = newLabel();
+                                endIfLabels.push(ifEndLabel);
+                                fprintf(asmCodeFile, "JCXZ %s\n", ifFalseLabel.c_str());
+                        }  statement {
+                                $$ = new SimpleText("if (" + $3->getName() + ")" + $6->getText());
+                                fprintf(asmCodeFile, "JMP %s\n", ifEndLabel.c_str());
+                                fprintf(asmCodeFile, "%s:\n", ifFalseLabel.c_str());
+                        } 
+
 statement           :   var_declaration{
                                 $$ = new SimpleText(toStringVarDeclaration($1));
                                 fprintf(logOut, "Line %d: statement : var_declaration\n\n%s\n\n",line_count, $$->getText().c_str());
@@ -581,21 +605,58 @@ statement           :   var_declaration{
                                 $$ = new SimpleText($1->getText());
                                 fprintf(logOut, "Line %d: statement : compound_statement\n\n%s\n\n",line_count, $$->getText().c_str());
                         }
-                    |   FOR LPAREN expression_statement expression_statement expression RPAREN statement {
-                                $$ = new SimpleText("for(" + $3->getName().substr(0, $3->getName().size()-1) + $4->getName().substr(0, $4->getName().size()-1) + $5->getName() + ")" + $7->getText());
+                    |   FOR {insideForLoop = true;} LPAREN expression_statement
+                        {
+                                string label = newLabel();
+                                curLoopStartLabel = label;
+                                fprintf(asmCodeFile, "%s:\n",label.c_str());
+                                curLoopEndLabel = newLabel();
+                                curLoopStatementLabel = newLabel();
+                                curLoopIncLabel = newLabel();
+                        }
+                        expression_statement 
+                        {
+                                fprintf(asmCodeFile, "JCXZ %s\nJMP %s\n%s:\n", curLoopEndLabel.c_str(),curLoopStatementLabel.c_str(), curLoopIncLabel.c_str());
+                                
+                        } 
+                        expression RPAREN {fprintf(asmCodeFile, "JMP %s\n%s:\n", curLoopStartLabel.c_str(), curLoopStatementLabel.c_str());}statement {
+                                $$ = new SimpleText("for(" + $4->getName().substr(0, $4->getName().size()-1) + $8->getName().substr(0, $8->getName().size()-1) + $8->getName() + ")" + $11->getText());
                                 fprintf(logOut, "Line %d: statement : FOR LPAREN expression_statement expression_statement expression RPAREN statement\n\n%s\n\n",line_count, $$->getText().c_str());
+                                fprintf(asmCodeFile, "JMP %s\n%s:\n",curLoopIncLabel.c_str(), curLoopEndLabel.c_str());
+                                insideForLoop = false;
                         }
-                    |   IF LPAREN expression RPAREN statement %prec LOWER_THAN_ELSE{
-                                $$ = new SimpleText("if (" + $3->getName() + ")" + $5->getText());
+                    |   if_condition %prec LOWER_THAN_ELSE {
+                                fprintf(asmCodeFile, "%s:\n", ifFalseLabel.c_str());
+                                $$ = new SimpleText($1->getText());
                                 fprintf(logOut, "Line %d: statement : IF LPAREN expression RPAREN statement\n\n%s\n\n",line_count, $$->getText().c_str());
+                                while(!endIfLabels.empty()){
+                                        fprintf(asmCodeFile, "%s:\n", endIfLabels.top().c_str());
+                                        endIfLabels.pop();
+                                }
                         }
-                    |   IF LPAREN expression RPAREN statement ELSE statement {
-                                $$ = new SimpleText("if (" + $3->getName() + ")" + $5->getText() + "else\n" + $7->getText());
+                    |   if_condition ELSE statement {
+                                // fprintf(asmCodeFile, "JMP %s\n", ifEndLabel.c_str());
+                                // fprintf(asmCodeFile, "%s:\n", ifFalseLabel.c_str());
+                                $$ = new SimpleText($1->getText() + "else\n" + $3->getText());
                                 fprintf(logOut, "Line %d: statement : IF LPAREN expression RPAREN statement ELSE statement\n\n%s\n\n",line_count, $$->getText().c_str());
+                                while(!endIfLabels.empty()){
+                                        fprintf(asmCodeFile, "%s:\n", endIfLabels.top().c_str());
+                                        endIfLabels.pop();
+                                        
+                                }
                         }
-                    |   WHILE LPAREN expression RPAREN statement{
-                                $$ = new SimpleText("while (" + $3->getName() + ")" + $5->getText());
+                    |   WHILE {
+                                string label = newLabel();
+                                curLoopStartLabel = label;
+                                fprintf(asmCodeFile, "%s:\n",label.c_str());
+                                curLoopEndLabel = newLabel();
+                        }
+                        LPAREN expression{
+                                fprintf(asmCodeFile, "JCXZ %s\n", curLoopEndLabel.c_str());
+                        } RPAREN statement{
+                                $$ = new SimpleText("while (" + $4->getName() + ")" + $7->getText());
                                 fprintf(logOut, "Line %d: statement : WHILE LPAREN expression RPAREN statement\n\n%s\n\n",line_count, $$->getText().c_str());
+                                fprintf(asmCodeFile, "JMP %s\n%s:\n",curLoopStartLabel.c_str(), curLoopEndLabel.c_str());
                         }
                     |   PRINTLN LPAREN ID RPAREN SEMICOLON{
                                 $$ = new SimpleText("printf(" + $3->getName() + ");\n" );
@@ -738,10 +799,23 @@ logic_expression    :   rel_expression {
                                 fprintf(logOut, "Line %d: logic_expression : rel_expression\n\n%s\n\n",line_count, $$->getName().c_str());
 
                         }
-                    |   rel_expression LOGICOP rel_expression{
-                                $$ = new SymbolInfo($1->getName() + $2->getName() + $3->getName(), "logic_expression");
+                    |   rel_expression LOGICOP 
+                        {       
+                                logicalExpEnd  = newLabel();
+                                if($2->getName()=="||"){
+                                        fprintf(asmCodeFile, "CMP CX,0\nJNZ %s\n", logicalExpEnd.c_str());
+                                }
+                                else if($2->getName()=="&&"){
+                                        fprintf(asmCodeFile, "CMP CX, 0\nJCXZ %s\n",logicalExpEnd.c_str());
+                                }
+                        }
+                        rel_expression{
+                                $$ = new SymbolInfo($1->getName() + $2->getName() + $4->getName(), "logic_expression");
                                 $$->setDataType("int");
+                                $$->setRegister("CX");
+
                                 fprintf(logOut, "Line %d: logic_expression : rel_expression LOGICOP rel_expression\n\n%s\n\n",line_count, $$->getName().c_str());
+                                fprintf(asmCodeFile, "%s:\n", logicalExpEnd.c_str());
                         }
                     ;
 
