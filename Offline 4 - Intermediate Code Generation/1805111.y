@@ -289,7 +289,7 @@ func_declaration    :   type_specifier ID LPAREN parameter_list RPAREN SEMICOLON
 
 
 func_definition     :   type_specifier ID LPAREN parameter_list RPAREN {
-                                fprintf(asmCodeFile, ($2->getName() + " PROC\nPUSH BP\nmov BP,SP\n").c_str());
+                                fprintf(asmCodeFile, ($2->getName() + " PROC\nPUSH BP\nMOV BP,SP\n").c_str());
                                 curFuncReturnLabel = newLabel();
                                 if($2->getName()=="main"){
                                         fprintf(asmCodeFile, "MOV AX, @DATA\nMOV DS, AX\n");
@@ -363,7 +363,7 @@ func_definition     :   type_specifier ID LPAREN parameter_list RPAREN {
                                 offset = 0;
                         }
                     |   type_specifier ID LPAREN RPAREN {
-                                fprintf(asmCodeFile, ($2->getName() + " PROC\nPUSH BP\nmov BP,SP\n").c_str());
+                                fprintf(asmCodeFile, ($2->getName() + " PROC\nPUSH BP\nMOV BP,SP\n").c_str());
                                 curFuncReturnLabel = newLabel();
                                 if($2->getName()=="main"){
                                         fprintf(asmCodeFile, "MOV AX, @DATA\nMOV DS, AX\t; data segment loaded\n");
@@ -1113,11 +1113,11 @@ int main(int argc,char *argv[])
         }
         
         fclose(asmCodeFile);
-        asmCodeFile = fopen("code.txt");
+        fclose(codeFile);
+        asmCodeFile = fopen("code.asm", "r");
         asmCode.optimize(asmCodeFile);
         
         fclose(dataFile);
-        fclose(codeFile);
         
 	fclose(logOut);
 	fclose(errorOut);
