@@ -172,7 +172,7 @@ Unterminated_CHARACTER ['](.|"\\t"|"\\n"|"\\"|"\\a"|"\\f"|"\\r"|"\\b"|"\\v"|"\\0
                 return CONTINUE;
 		    }
 
-"printf"    {
+"println"    {
                  return PRINTLN;
             }
 

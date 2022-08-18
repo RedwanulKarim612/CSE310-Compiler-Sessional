@@ -9,8 +9,6 @@ class ASMCode{
     string procedure = "";
 public:
     
-
-
     string getDataSegment(){
         return this->dataSegment;
     }
@@ -29,19 +27,18 @@ public:
     }
 
     string printlnFunc(){
-        string tmp = "PRINTLN PROC\n";
-        tmp+="PUSH AX\n";
-        tmp+="PUSH DX\n";
-        tmp+="MOV AH, 2\n";
-        tmp+="MOV DL, 0Dh\n";
-        tmp+="INT 21h\n";
-        tmp+="MOV DL, 0Ah\n";
-        tmp+="INT 21h\n";
-        tmp+="POP DX\n";
-        tmp+="POP AX\n";
-        tmp+="RET\n";
-        tmp+="PRINTLN ENDP\n";
+        FILE * printlnFile = fopen("println.txt", "r");
+        char c;
+        string tmp = "";
+        while(( c=fgetc(printlnFile))!=EOF){
+            tmp+=c;
+        }
         return tmp;
+    }
+
+    void optimize(FILE * codeFile){
+        FILE * optimizedCodeFile = fopen("optimizedCode.asm", "w");
+
     }
 };
 

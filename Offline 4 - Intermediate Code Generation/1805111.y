@@ -15,7 +15,6 @@ FILE* logOut;
 FILE* errorOut;
 FILE* asmCodeFile;
 FILE* codeFile;
-FILE* optimizedAsmCodeFile;
 FILE* dataFile;
 extern FILE* yyin;
 extern int line_count;
@@ -26,10 +25,12 @@ int labelCount=0;
 int tempCount=0;
 bool arrayElement = false;
 bool lop = true;
+int curFuncReturnSize = 0;
 string curLoopStartLabel;
 string curLoopEndLabel;
 string curLoopStatementLabel;
 string curLoopIncLabel;
+string curFuncReturnLabel;
 
 string logicalExpEnd;
 string logicalExpFalse;
@@ -38,6 +39,7 @@ string expressionCode = "";
 string ifFalseLabel;
 string ifEndLabel;
 stack<string> endIfLabels;
+stack<string> endLoopLabels;
 
 int yylex(void);
 int yyparse(void);
@@ -208,6 +210,7 @@ start   :       {
                 }
                 program {
                         fprintf(logOut,"Line %d: start : program\n\n", line_count);
+                        fprintf(asmCodeFile, "%s\n", asmCode.printlnFunc().c_str());
                         fprintf(asmCodeFile, "END MAIN\n");
                 }
 
@@ -237,7 +240,7 @@ unit    :   var_declaration{
 
 func_declaration    :   type_specifier ID LPAREN parameter_list RPAREN SEMICOLON{
                                 fprintf(logOut,"Line %d: func_declaration : type_specifier ID LPAREN parameter_list RPAREN SEMICOLON\n\n", line_count);
-
+                                
                                 if(!table.isGlobalScope()){
                                         printError("illegal scoping of function " + $2->getName());
                                 }
@@ -287,6 +290,7 @@ func_declaration    :   type_specifier ID LPAREN parameter_list RPAREN SEMICOLON
 
 func_definition     :   type_specifier ID LPAREN parameter_list RPAREN {
                                 fprintf(asmCodeFile, ($2->getName() + " PROC\nPUSH BP\nmov BP,SP\n").c_str());
+                                curFuncReturnLabel = newLabel();
                                 if($2->getName()=="main"){
                                         fprintf(asmCodeFile, "MOV AX, @DATA\nMOV DS, AX\n");
                                 }
@@ -348,6 +352,7 @@ func_definition     :   type_specifier ID LPAREN parameter_list RPAREN {
                                 $$->appendText($7->getText()+"\n"); 
                                 curReturnType = "";
                                 fprintf(logOut,"Line %d: func_definition : type_specifier ID LPAREN parameter_list RPAREN compound_statement\n\n%s\n\n", line_count,$$->getText().c_str());
+                                fprintf(asmCodeFile, "%s:\n", curFuncReturnLabel.c_str());
                                 fprintf(asmCodeFile, "ADD SP, %d\n", abs(offset));
                                 fprintf(asmCodeFile, "POP BP\n");      
                                 if($2->getName()=="main"){
@@ -359,6 +364,7 @@ func_definition     :   type_specifier ID LPAREN parameter_list RPAREN {
                         }
                     |   type_specifier ID LPAREN RPAREN {
                                 fprintf(asmCodeFile, ($2->getName() + " PROC\nPUSH BP\nmov BP,SP\n").c_str());
+                                curFuncReturnLabel = newLabel();
                                 if($2->getName()=="main"){
                                         fprintf(asmCodeFile, "MOV AX, @DATA\nMOV DS, AX\t; data segment loaded\n");
                                 }
@@ -404,6 +410,7 @@ func_definition     :   type_specifier ID LPAREN parameter_list RPAREN {
                                         $$->appendText($6->getText()+"\n"); 
                                         curReturnType="";
                                         fprintf(logOut,"Line %d: func_definition : type_specifier ID LPAREN RPAREN compound_statement\n\n%s\n\n",line_count, $$->getText().c_str());
+                                        fprintf(asmCodeFile, "%s:\n", curFuncReturnLabel.c_str());
                                         fprintf(asmCodeFile, "ADD SP, %d\n", abs(offset));
                                         fprintf(asmCodeFile, "POP BP\n");      
 
@@ -613,6 +620,7 @@ statement           :   var_declaration{
                                 curLoopEndLabel = newLabel();
                                 curLoopStatementLabel = newLabel();
                                 curLoopIncLabel = newLabel();
+                                endLoopLabels.push(curLoopEndLabel);
                         }
                         expression_statement 
                         {
@@ -622,11 +630,11 @@ statement           :   var_declaration{
                         expression RPAREN {fprintf(asmCodeFile, "JMP %s\n%s:\n", curLoopStartLabel.c_str(), curLoopStatementLabel.c_str());}statement {
                                 $$ = new SimpleText("for(" + $4->getName().substr(0, $4->getName().size()-1) + $8->getName().substr(0, $8->getName().size()-1) + $8->getName() + ")" + $11->getText());
                                 fprintf(logOut, "Line %d: statement : FOR LPAREN expression_statement expression_statement expression RPAREN statement\n\n%s\n\n",line_count, $$->getText().c_str());
-                                fprintf(asmCodeFile, "JMP %s\n%s:\n",curLoopIncLabel.c_str(), curLoopEndLabel.c_str());
+                                fprintf(asmCodeFile, "JMP %s\n%s:\n",curLoopIncLabel.c_str(), endLoopLabels.top().c_str());
+                                endLoopLabels.pop();
                                 insideForLoop = false;
                         }
                     |   if_condition %prec LOWER_THAN_ELSE {
-                                fprintf(asmCodeFile, "%s:\n", ifFalseLabel.c_str());
                                 $$ = new SimpleText($1->getText());
                                 fprintf(logOut, "Line %d: statement : IF LPAREN expression RPAREN statement\n\n%s\n\n",line_count, $$->getText().c_str());
                                 while(!endIfLabels.empty()){
@@ -642,7 +650,7 @@ statement           :   var_declaration{
                                 while(!endIfLabels.empty()){
                                         fprintf(asmCodeFile, "%s:\n", endIfLabels.top().c_str());
                                         endIfLabels.pop();
-                                        
+                                
                                 }
                         }
                     |   WHILE {
@@ -650,18 +658,26 @@ statement           :   var_declaration{
                                 curLoopStartLabel = label;
                                 fprintf(asmCodeFile, "%s:\n",label.c_str());
                                 curLoopEndLabel = newLabel();
+                                endLoopLabels.push(curLoopEndLabel);
                         }
                         LPAREN expression{
+                                if($4->getRegister()!="CX"){
+                                        fprintf(asmCodeFile, "MOV CX, %s\n", $4->getRegister().c_str());
+                                }
                                 fprintf(asmCodeFile, "JCXZ %s\n", curLoopEndLabel.c_str());
                         } RPAREN statement{
                                 $$ = new SimpleText("while (" + $4->getName() + ")" + $7->getText());
                                 fprintf(logOut, "Line %d: statement : WHILE LPAREN expression RPAREN statement\n\n%s\n\n",line_count, $$->getText().c_str());
-                                fprintf(asmCodeFile, "JMP %s\n%s:\n",curLoopStartLabel.c_str(), curLoopEndLabel.c_str());
+                                fprintf(asmCodeFile, "JMP %s\n%s:\n",curLoopStartLabel.c_str(), endLoopLabels.top().c_str());
+                                endLoopLabels.pop();
                         }
                     |   PRINTLN LPAREN ID RPAREN SEMICOLON{
                                 $$ = new SimpleText("printf(" + $3->getName() + ");\n" );
                                 fprintf(logOut, "Line %d: statement : PRINTLN LPAREN ID RPAREN SEMICOLON\n\n",line_count, $$->getText().c_str());
-                                if(!table.lookup($3->getName())) printError("Undeclared variable " + $3->getName());
+                                SymbolInfo* symbol = table.lookup($3->getName());
+                                if(!symbol) {printError("Undeclared variable " + $3->getName());
+                                }
+                                else fprintf(asmCodeFile, "PUSH %s\nCALL PRINTLN\n",symbol->getRegister().c_str() );
                                 fprintf(logOut,"%s\n\n",$$->getText().c_str());
 
                         }
@@ -680,6 +696,7 @@ statement           :   var_declaration{
                                 $$ = new SimpleText("return " + $2->getName() +";\n" );
                                 fprintf(logOut, "Line %d: statement : RETURN expression SEMICOLON\n\n%s\n\n",line_count, $$->getText().c_str());
                                 fprintf(asmCodeFile, "MOV CX, %s\n", $2->getRegister().c_str());
+                                fprintf(asmCodeFile, "JMP %s\n", curFuncReturnLabel.c_str());
                         }
                     /* |   error statement{
                                 $$ = new SimpleText($2->getText());
@@ -913,11 +930,15 @@ term                :   unary_expression{
 unary_expression    :   ADDOP unary_expression{
                                 $$ = new SymbolInfo($1->getName() + $2->getName(), "unary_expression");
                                 $$->setDataType($2->getDataType());
+                                $$->setRegister($2->getRegister());
+                                if($1->getName()=="-") fprintf(asmCodeFile, "NEG %s\n", $2->getRegister().c_str());
                                 fprintf(logOut, "Line %d: unary_expression : ADDOP unary_expression\n\n%s\n\n",line_count, $$->getName().c_str());
                         }
                     |   NOT unary_expression {
                                 $$ = new SymbolInfo("!" + $2->getName(), "unary_expression");
                                 $$->setDataType("int");
+                                $$->setRegister($2->getRegister());
+                                fprintf(asmCodeFile, "NOT %s\n", $2->getRegister().c_str());
                                 fprintf(logOut, "Line %d: unary_expression : NOT unary_expression\n\n%s\n\n",line_count, $$->getName().c_str());
                         }
                     |   factor  {
@@ -1013,12 +1034,14 @@ factor              :   variable  {
                     |   variable INCOP {
                                 $$ = new SymbolInfo($1->getName()+"++", "factor");
                                 $$->setDataType($1->getDataType());
+                                $$->setRegister($1->getRegister());
                                 fprintf(logOut, "Line %d: factor : variable INCOP\n\n%s\n\n",line_count, $$->getName().c_str());
                                 fprintf(asmCodeFile, "INC %s\n", $1->getRegister().c_str());
                         }
                     |   variable DECOP {
                                 $$ = new SymbolInfo($1->getName()+"--", "factor");
                                 $$->setDataType($1->getDataType());
+                                $$->setRegister($1->getRegister());
                                 fprintf(logOut, "Line %d: factor : variable DECOP\n\n%s\n\n",line_count, $$->getName().c_str());
                                 fprintf(asmCodeFile, "DEC %s\n", $1->getRegister().c_str());  
                         }
@@ -1088,10 +1111,11 @@ int main(int argc,char *argv[])
         while((c=fgetc(asmCodeFile))!=EOF){
                 fputc(c,codeFile);
         }
-
-
         
         fclose(asmCodeFile);
+        asmCodeFile = fopen("code.txt");
+        asmCode.optimize(asmCodeFile);
+        
         fclose(dataFile);
         fclose(codeFile);
         
