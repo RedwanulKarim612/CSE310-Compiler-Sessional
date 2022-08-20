@@ -42,7 +42,8 @@ public:
         curLine.clear();
         string tmp = "";
         for(int i=0;i<str.size()-1;i++){
-            if(str[i]==' ' || str[i]==','){
+            if(str[i]==';') break;
+            else if(str[i]==' ' || str[i]==',' || str[i]=='\t'){
                 if(tmp!="") curLine.push_back(tmp);
                 tmp.clear();
             }
@@ -63,7 +64,9 @@ public:
             // cout << endl;
             if(curLine[0]=="MOV" && prevLine[0]=="MOV" ){
                 if(curLine[1]==prevLine[2] && curLine[2]==prevLine[1])
-                line = "; peephole optimization " + line;
+                    line = "; peephole optimization " + line;
+                else if(curLine[1]==prevLine[1] && curLine[2]==prevLine[2])
+                    line = "; peephole optimization " + line;
             }
             if(curLine[0]=="MOV" && curLine[1]==curLine[2])
                 line = "; peephole optimization " + line;
