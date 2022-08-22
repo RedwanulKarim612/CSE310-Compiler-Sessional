@@ -5,7 +5,7 @@ using namespace std;
 
 class ASMCode{
     string initialSegment = ".MODEL SMALL\n.STACK 100H\n";
-    string dataSegment = "\n.DATA\n";
+    string dataSegment = "\n.DATA\nNUMBER_STRING DB '000000000000000 $'\nSIGN DB ?\n";
     string procedure = "";
 
     vector<string> prevLine, curLine;
@@ -30,12 +30,17 @@ public:
     }
 
     string printlnFunc(){
-        FILE * printlnFile = fopen("println.txt", "r");
-        char c;
-        string tmp = "";
-        while(( c=fgetc(printlnFile))!=EOF){
-            tmp+=c;
-        }
+        // FILE * printlnFile = fopen("println.txt", "r");
+        // char c;
+        string tmp = "PRINTLN PROC\nPUSH BP\nMOV BP,SP\nMOV SIGN, '+'\n";
+        tmp+="MOV AX, 4[BP]\nLEA SI, NUMBER_STRING\nADD SI, 15\nCMP AX, 0\n";
+        tmp+="JGE PRINT_ELEMENT\nNEG AX\nMOV SIGN, '-'\nPRINT_ELEMENT:\n";
+        tmp+="DEC SI\nMOV DX, 0\nMOV CX, 10\nDIV CX\nADD DL, '0'\nMOV [SI], DL\n";
+        tmp+="CMP AX, 0\nJNE PRINT_ELEMENT\nCMP SIGN, '-'\nJNE END_PRINT_ELEM\nDEC SI\n";
+        tmp+="MOV [SI], '-'\nEND_PRINT_ELEM:\n";
+        tmp+="MOV DX, SI\nMOV AH, 9\nINT 21H\nMOV DX, 13\nMOV AH, 2\nINT 21H\n";
+        tmp+="MOV DX, 10\nMOV AH, 2\nINT 21H\nPOP BP\nRET 2\nPRINTLN ENDP\n";
+        
         return tmp;
     }
     void split(string str){
@@ -52,7 +57,7 @@ public:
         curLine.push_back(tmp);
     }
     void optimize(FILE * codeFile){
-        FILE * optimizedCodeFile = fopen("optimizedCode.asm", "w");
+        FILE * optimizedCodeFile = fopen("optimized_code.asm", "w");
         char * tmp = NULL;
         size_t len = 0;
         
