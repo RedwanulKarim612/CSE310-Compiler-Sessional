@@ -1,4 +1,4 @@
-# CSE310-Compiler-Sesional
+# CSE310-Compiler-Sessional
 This repository contains the assignments from the CSE310-Compiler course. The main objective of these assignments is to create a compiler that converts a subset of C language into 8086 assembly code.
 
 
